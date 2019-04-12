@@ -1,0 +1,52 @@
+Source: gvm-libs
+Priority: optional
+Maintainer: Mohammad Razavi <mrazavi64@gmail.com>
+Build-Depends: debhelper (>= 9.0.0), cmake, pkg-config, libglib2.0-dev, libgnutls28-dev, libgcrypt11-dev, zlib1g-dev, libgpgme-dev, uuid-dev, libssh-dev, libhiredis-dev, libldap2-dev, libfreeradius-dev, doxygen, xmltoman
+Standards-Version: 4.1.4
+Section: libs
+Homepage: https://community.greenbone.net/
+Vcs-Browser: https://github.com/greenbone/gvm-libs
+Vcs-git: https://github.com/greenbone/gvm-libs.git
+
+Package: libgvm-dev
+Section: libdevel
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, libgvm (= ${binary:Version}), uuid-dev
+Description: remote network security auditor - static libraries and headers
+ The Greenbone Vulnerability Management Solution (previously known as
+ Open Vulnerability Assessment System) is a modular security auditing tool,
+ used for testing remote systems for vulnerabilities that should be fixed.
+ .
+ It is made up of several parts: a manager i.e. the main server gvmd.
+ A scanner openvas-scanner that execute vulnerability checking scripts.
+ A  web interface called Greenbone Security Assistant gsad.
+ .
+ This package contains the required static libraries and headers.
+
+Package: libgvm
+Section: libs
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: remote network security auditor - shared libraries
+ The Greenbone Vulnerability Management Solution (previously known as
+ Open Vulnerability Assessment System) is a modular security auditing tool,
+ used for testing remote systems for vulnerabilities that should be fixed.
+ .
+ It is made up of several parts: a manager i.e. the main server gvmd.
+ A scanner openvas-scanner that execute vulnerability checking scripts.
+ A  web interface called Greenbone Security Assistant gsad.
+ .
+ This package contains the required shared libraries.
+
+Package: gvm
+Architecture: any
+Section: metapackages
+Depends: ${misc:Depends}, gvmd-sqlite (>= 8.0) | gvmd-pg (>= 8.0), openvas-scanner (>= 6.0), gsad (>= 8.0)
+Description: remote network security auditor - metapackage
+ The Greenbone Vulnerability Management Solution (previously known as
+ Open Vulnerability Assessment System) is a modular security auditing tool,
+ used for testing remote systems for vulnerabilities that should be fixed.
+ .
+ It is made up of several parts: a manager i.e. the main server gvmd.
+ A scanner openvas-scanner that execute vulnerability checking scripts.
+ A  web interface called Greenbone Security Assistant gsad.
