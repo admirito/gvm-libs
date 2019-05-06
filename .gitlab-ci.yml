@@ -1,0 +1,62 @@
+include:
+  # - project: other/kayna
+  #   ref: master
+  #   file: "/ci/1.0/debian_system.yml"
+
+  - project: other/kayna
+    ref: master
+    file: "/ci/1.0/variables.yml"
+
+  - project: other/kayna
+    ref: master
+    file: "/ci/1.0/stages.yml"
+
+  - project: other/kayna
+    ref: master
+    file: "/ci/1.0/before_script.yml"
+
+  - project: other/kayna
+    ref: master
+    file: "/ci/1.0/init_job.yml"
+
+  - project: other/kayna
+    ref: master
+    file: "/ci/1.0/build_job.yml"
+
+  - project: other/kayna
+    ref: master
+    file: "/ci/1.0/test_job.yml"
+
+  # - project: other/kayna
+  #   ref: master
+  #   file: "/ci/1.0/debuild_job.yml"
+
+  - project: other/kayna
+    ref: master
+    file: "/ci/1.0/upload_job.yml"
+
+
+debuild_job:
+  image: "kayna-$DISTRIBUTION-$CI_PROJECT_ID"
+  stage: debuild
+  script:
+    - rm -f KAYNA-LOG
+    - cp debian/testlog/* debian &> /dev/null || true
+    - export ORIG_VER=$(dpkg-parsechangelog --show-field Version | sed 's/-.*//')
+    - git fetch origin pristine-tar:pristine-tar
+    - pristine-tar checkout ../${CI_PROJECT_NAME}_${ORIG_VER}.orig.tar.gz
+    - echo 'extend-diff-ignore = "(^|/)(.gitlab-ci.yml|APT-UPDATE|KAYNA-LOG)$"' > debian/source/options
+    - rm -f KAYNA-LOG
+    - 'cp debian/testlog/* debian &> /dev/null || :'
+    - echo "$CI_COMMIT_REF_NAME" | grep -qP "$STABLE_BRANCH_REGEX" || export INCREMENTAL_VERSION=1
+    - kayna debuild
+  artifacts:
+    name: deb_package
+    paths:
+      - KAYNA-LOG
+      - LINTIAN*
+      - ELDORADO/
+    expire_in: 1 week
+  dependencies:
+    - build_job
+    - test_job
