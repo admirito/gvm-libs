@@ -245,7 +245,7 @@ entity_attribute (entity_t entity, const char *name)
 void
 add_attributes (entity_t entity, const gchar **names, const gchar **values)
 {
-  if (*names && *values)
+  if (names && values && *names && *values)
     {
       if (entity->attributes == NULL)
         entity->attributes =
@@ -1191,7 +1191,7 @@ foreach_print_attribute_to_string (gpointer name, gpointer value,
  * @brief empty.
  *
  * @param[in]      entity  Entity tree to print to string.
- * @param[in,out]  string  String to write to (will be created if NULL).
+ * @param[in,out]  string  String to write to.
  */
 void
 print_entity_to_string (entity_t entity, GString *string)

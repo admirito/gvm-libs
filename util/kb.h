@@ -34,7 +34,11 @@
 /**
  * @brief Default KB location.
  */
-#define KB_PATH_DEFAULT "/tmp/redis.sock"
+#ifdef REDIS_SOCKET_PATH
+#define KB_PATH_DEFAULT REDIS_SOCKET_PATH
+#else
+#define KB_PATH_DEFAULT "/run/redis/redis.sock"
+#endif
 
 /**
  * @brief Possible type of a kb_item.
@@ -235,7 +239,7 @@ kb_item_free (struct kb_item *);
  * @brief Initialize a new Knowledge Base object.
  * @param[in] kb  Reference to a kb_t to initialize.
  * @param[in] kb_path   Path to KB.
- * @return 0 on success, non-null on error.
+ * @return 0 on success, -1 on connection error, -2 on unavailable DB spot.
  */
 static inline int
 kb_new (kb_t *kb, const char *kb_path)

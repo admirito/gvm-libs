@@ -84,7 +84,7 @@ nvticache_init (const char *src, const char *kb_path)
     return 0;
 
   if (kb_new (&cache_kb, kb_path)
-      || kb_item_set_str (cache_kb, NVTICACHE_STR, "1", 0))
+      || kb_item_set_str (cache_kb, NVTICACHE_STR, "0", 0))
     return -1;
   return 0;
 }
@@ -149,12 +149,16 @@ nvt_feed_version ()
 {
   char filename[2048], *fcontent = NULL, *plugin_set;
   GError *error = NULL;
+  static int msg_shown = 0;
 
   g_snprintf (filename, sizeof (filename), "%s/plugin_feed_info.inc", src_path);
   if (!g_file_get_contents (filename, &fcontent, NULL, &error))
     {
-      if (error)
-        g_warning ("nvt_feed_version: %s", error->message);
+      if (error && msg_shown == 0)
+	{
+	  g_warning ("nvt_feed_version: %s", error->message);
+	  msg_shown = 1;
+	}
       g_error_free (error);
       return NULL;
     }
@@ -165,7 +169,7 @@ nvt_feed_version ()
       g_free (fcontent);
       return NULL;
     }
-
+  msg_shown = 0;
   plugin_set = g_strndup (plugin_set + 14, 12);
   g_free (fcontent);
   return plugin_set;
@@ -177,14 +181,21 @@ nvt_feed_version ()
 void
 nvticache_save ()
 {
-  char *feed_version;
+  char *feed_version, *old_version;
   if (cache_kb && !cache_saved)
     {
       kb_save (cache_kb);
       cache_saved = 1;
     }
-  if ((feed_version = nvt_feed_version ()))
-    kb_item_set_str (cache_kb, NVTICACHE_STR, feed_version, 0);
+  old_version = nvticache_feed_version ();
+  feed_version = nvt_feed_version ();
+  if (g_strcmp0 (old_version, feed_version))
+    {
+      kb_item_set_str (cache_kb, NVTICACHE_STR, feed_version, 0);
+      g_message ("Updated NVT cache from version %s to %s", old_version,
+                 feed_version);
+    }
+  g_free (old_version);
   g_free (feed_version);
 }
 
@@ -530,13 +541,10 @@ nvticache_get_prefs (const char *oid)
       nvtpref_t *np;
       char **array = g_strsplit (element->v_str, "|||", -1);
 
-      assert (array[2]);
-      assert (!array[3]);
-      np = g_malloc0 (sizeof (nvtpref_t));
-      np->name = array[0];
-      np->type = array[1];
-      np->dflt = array[2];
-      g_free (array);
+      assert (array[3]);
+      assert (!array[4]);
+      np = nvtpref_new (atoi (array[0]), array[1], array[2], array[3]);
+      g_strfreev (array);
       list = g_slist_append (list, np);
       element = element->next;
     }
@@ -585,7 +593,7 @@ nvticache_delete (const char *oid)
   assert (oid);
 
   filename = nvticache_get_filename (oid);
-  g_snprintf (pattern, sizeof (pattern), "prefs:%s", oid);
+  g_snprintf (pattern, sizeof (pattern), "oid:%s:prefs", oid);
   kb_del_items (cache_kb, pattern);
   g_snprintf (pattern, sizeof (pattern), "nvt:%s", oid);
   kb_del_items (cache_kb, pattern);
