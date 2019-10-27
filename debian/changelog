@@ -1,3 +1,9 @@
+gvm-libs (11.0.0-1) bionic; urgency=medium
+
+  * Import upstream version 11.0.0
+
+ -- Mohammad Razavi <mrazavi64@gmail.com>  Sun, 27 Oct 2019 10:11:44 +0330
+
 gvm-libs (10.0.0-1) bionic; urgency=medium
 
   * Initial release (imported upstream version 10.0.0)

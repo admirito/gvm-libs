@@ -41,7 +41,8 @@ Description: remote network security auditor - shared libraries
 Package: gvm
 Architecture: any
 Section: metapackages
-Depends: ${misc:Depends}, gvmd-sqlite (>= 8.0) | gvmd-pg (>= 8.0), openvas-scanner (>= 6.0), gsad (>= 8.0)
+Depends: ${misc:Depends}, gvmd-pg (>= 9.0), gsad (>= 9.0)
+Recommends: ospd-openvas (>= 1.0.0)
 Description: remote network security auditor - metapackage
  The Greenbone Vulnerability Management Solution (previously known as
  Open Vulnerability Assessment System) is a modular security auditing tool,
