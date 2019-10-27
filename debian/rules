@@ -11,10 +11,13 @@ override_dh_auto_clean:
 	dh_auto_clean
 
 override_dh_auto_configure:
-	dh_auto_configure -- -DLOCALSTATEDIR=/var -DSYSCONFDIR=/etc -DLIBDIR=/usr/lib/$(DEB_HOST_MULTIARCH) -DINCLUDEDIR=/usr/include/$(DEB_HOST_MULTIARCH)
+	dh_auto_configure -- -DLOCALSTATEDIR=/var -DSYSCONFDIR=/etc -DLIBDIR=/usr/lib/$(DEB_HOST_MULTIARCH) -DINCLUDEDIR=/usr/include/$(DEB_HOST_MULTIARCH) -DREDIS_SOCKET_PATH=/var/run/redis/redis.sock
 
 override_dh_installchangelogs:
-	dh_installchangelogs -k CHANGES
+	dh_installchangelogs -k CHANGELOG.md
+
+override_dh_auto_test:
+	true
 
 %:
 	dh $@
