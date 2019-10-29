@@ -33,7 +33,6 @@
 #include <stdio.h>
 #include <stdlib.h> /* for atoi */
 #include <string.h> /* for strlen, strerror, strncpy, memset */
-#include <unistd.h> /* for sleep */
 
 #undef G_LOG_DOMAIN
 #define G_LOG_DOMAIN "lib  kb"
@@ -49,12 +48,6 @@
  * @brief Name of the namespace usage bitmap in redis.
  */
 #define GLOBAL_DBINDEX_NAME "GVM.__GlobalDBIndex"
-
-/**
- * @brief Number of seconds to wait for between two attempts to acquire a KB
- *        namespace.
- */
-#define KB_RETRY_DELAY 60
 
 static const struct kb_operations KBRedisOperations;
 
@@ -108,84 +101,6 @@ try_database_index (struct kb_redis *kbr, int index)
   return rc;
 }
 
-/* Redis 2.4.* compatibility mode.
- *
- * Before 2.6.* redis won't tell its clients how many databases have been
- * configured. We can find it empirically by attempting to select a given
- * DB and seeing whether we get an error or not.
- */
-/**
- * @brief Max number of configured DB.
- */
-#define MAX_DB_INDEX__24 1000
-
-/**
- * @brief Set the number of databases have been configured
- *        into kbr struct. (For Redis 2.4.* compatibility).
- * @param[in] kbr Subclass of struct kb where to save the max db index founded.
- * @return 0 on success, -1 on error.
- */
-static int
-fetch_max_db_index_compat (struct kb_redis *kbr)
-{
-  redisContext *ctx = kbr->rctx;
-  redisReply *rep;
-  int min, max;
-  int rc = 0;
-
-  min = 1;
-  max = MAX_DB_INDEX__24;
-
-  while (min < max)
-    {
-      int current;
-
-      current = min + ((max - min) / 2);
-
-      rep = redisCommand (ctx, "SELECT %d", current);
-      if (rep == NULL)
-        {
-          g_log (G_LOG_DOMAIN, G_LOG_LEVEL_CRITICAL,
-                 "%s: redis command failed with '%s'", __func__, ctx->errstr);
-          return -1;
-        }
-
-      switch (rep->type)
-        {
-        case REDIS_REPLY_ERROR:
-          max = current;
-          break;
-
-        case REDIS_REPLY_STATUS:
-          min = current + 1;
-          break;
-
-        default:
-          g_log (G_LOG_DOMAIN, G_LOG_LEVEL_CRITICAL,
-                 "%s: unexpected reply of type %d", __func__, rep->type);
-          freeReplyObject (rep);
-          return -1;
-        }
-      freeReplyObject (rep);
-    }
-
-  kbr->max_db = min;
-
-  /* Go back to DB #0 */
-  rep = redisCommand (ctx, "SELECT 0");
-  if (rep == NULL)
-    {
-      g_log (G_LOG_DOMAIN, G_LOG_LEVEL_CRITICAL,
-             "%s: DB selection failed with '%s'", __func__, ctx->errstr);
-      rc = -1;
-    }
-
-  if (rep)
-    freeReplyObject (rep);
-
-  return rc;
-}
-
 /**
  * @brief Set the number of databases have been configured
  *        into kbr struct.
@@ -216,12 +131,7 @@ fetch_max_db_index (struct kb_redis *kbr)
       goto err_cleanup;
     }
 
-  if (rep->elements == 0)
-    {
-      /* Redis 2.4 compatibility mode. Suboptimal... */
-      rc = fetch_max_db_index_compat (kbr);
-    }
-  else if (rep->elements == 2)
+  if (rep->elements == 2)
     {
       kbr->max_db = (unsigned) atoi (rep->element[1]->str);
     }
@@ -340,43 +250,38 @@ err_cleanup:
  *        a connection.
  * @param[in] kbr Subclass of struct kb where to fetch the context.
  *                or where it is saved in case of a new connection.
- * @return Redis context on success, NULL otherwise.
+ * @return 0 on success, -1 on connection error, -2 on unavailable DB slot.
  */
-static redisContext *
+static int
 get_redis_ctx (struct kb_redis *kbr)
 {
   int rc;
 
   if (kbr->rctx != NULL)
-    return kbr->rctx;
+    return 0;
 
-  do
+  kbr->rctx = redisConnectUnix (kbr->path);
+  if (kbr->rctx == NULL || kbr->rctx->err)
     {
-      kbr->rctx = redisConnectUnix (kbr->path);
-      if (kbr->rctx == NULL || kbr->rctx->err)
-        {
-          g_log (G_LOG_DOMAIN, G_LOG_LEVEL_CRITICAL,
-                 "%s: redis connection error: %s", __func__,
-                 kbr->rctx ? kbr->rctx->errstr : strerror (ENOMEM));
-          redisFree (kbr->rctx);
-          kbr->rctx = NULL;
-          return NULL;
-        }
-
-      rc = select_database (kbr);
-      if (rc)
-        {
-          g_debug ("%s: No redis DB available, retrying in %ds...", __func__,
-                   KB_RETRY_DELAY);
-          sleep (KB_RETRY_DELAY);
-          redisFree (kbr->rctx);
-          kbr->rctx = NULL;
-        }
+      g_log (G_LOG_DOMAIN, G_LOG_LEVEL_CRITICAL,
+             "%s: redis connection error to %s: %s", __func__, kbr->path,
+             kbr->rctx ? kbr->rctx->errstr : strerror (ENOMEM));
+      redisFree (kbr->rctx);
+      kbr->rctx = NULL;
+      return -1;
     }
-  while (rc != 0);
+
+  rc = select_database (kbr);
+  if (rc)
+    {
+      g_log (G_LOG_DOMAIN, G_LOG_LEVEL_CRITICAL, "No redis DB available");
+      redisFree (kbr->rctx);
+      kbr->rctx = NULL;
+      return -2;
+    }
 
   g_debug ("%s: connected to redis://%s/%d", __func__, kbr->path, kbr->db);
-  return kbr->rctx;
+  return 0;
 }
 
 /**
@@ -462,7 +367,7 @@ redis_get_kb_index (kb_t kb)
  * @brief Initialize a new Knowledge Base object.
  * @param[in] kb  Reference to a kb_t to initialize.
  * @param[in] kb_path   Path to KB.
- * @return 0 on success, non-null on error.
+ * @return 0 on success, -1 on connection error, -2 when no DB is available.
  */
 static int
 redis_new (kb_t *kb, const char *kb_path)
@@ -474,17 +379,18 @@ redis_new (kb_t *kb, const char *kb_path)
   kbr->kb.kb_ops = &KBRedisOperations;
   strncpy (kbr->path, kb_path, strlen (kb_path));
 
-  rc = redis_test_connection (kbr);
-  if (rc)
+  if ((rc = get_redis_ctx (kbr)) < 0)
+    return rc;
+  if (redis_test_connection (kbr))
     {
       g_log (G_LOG_DOMAIN, G_LOG_LEVEL_CRITICAL,
              "%s: cannot access redis at '%s'", __func__, kb_path);
       redis_delete ((kb_t) kbr);
       kbr = NULL;
+      rc = -1;
     }
 
   *kb = (kb_t) kbr;
-
   return rc;
 }
 
@@ -508,7 +414,7 @@ redis_direct_conn (const char *kb_path, const int kb_index)
   if (kbr->rctx == NULL || kbr->rctx->err)
     {
       g_log (G_LOG_DOMAIN, G_LOG_LEVEL_CRITICAL,
-             "%s: redis connection error: %s", __func__,
+             "%s: redis connection error to %s: %s", __func__, kbr->path,
              kbr->rctx ? kbr->rctx->errstr : strerror (ENOMEM));
       redisFree (kbr->rctx);
       g_free (kbr);
@@ -552,7 +458,7 @@ redis_find (const char *kb_path, const char *key)
       if (kbr->rctx == NULL || kbr->rctx->err)
         {
           g_log (G_LOG_DOMAIN, G_LOG_LEVEL_CRITICAL,
-                 "%s: redis connection error: %s", __func__,
+                 "%s: redis connection error to %s: %s", __func__, kbr->path,
                  kbr->rctx ? kbr->rctx->errstr : strerror (ENOMEM));
           redisFree (kbr->rctx);
           g_free (kbr);
@@ -569,13 +475,15 @@ redis_find (const char *kb_path, const char *key)
           if (rep != NULL)
             freeReplyObject (rep);
           i++;
+          redisFree (kbr->rctx);
+          kbr->rctx = NULL;
           continue;
         }
       freeReplyObject (rep);
       rep = redisCommand (kbr->rctx, "SELECT %u", i);
       if (rep == NULL || rep->type != REDIS_REPLY_STATUS)
         {
-          sleep (KB_RETRY_DELAY);
+          redisFree (kbr->rctx);
           kbr->rctx = NULL;
         }
       else
@@ -590,8 +498,8 @@ redis_find (const char *kb_path, const char *key)
                   return (kb_t) kbr;
                 }
             }
+          redisFree (kbr->rctx);
         }
-      redisFree (kbr->rctx);
       i++;
     }
   while (i < kbr->max_db);
@@ -729,22 +637,17 @@ redis_cmd (struct kb_redis *kbr, const char *fmt, ...)
   va_start (ap, fmt);
   do
     {
-      redisContext *ctx;
-
-      rep = NULL;
-
-      ctx = get_redis_ctx (kbr);
-      if (ctx == NULL)
+      if (get_redis_ctx (kbr) < 0)
         {
           va_end (ap);
           return NULL;
         }
 
       va_copy (aq, ap);
-      rep = redisvCommand (ctx, fmt, aq);
+      rep = redisvCommand (kbr->rctx, fmt, aq);
       va_end (aq);
 
-      if (ctx->err)
+      if (kbr->rctx->err)
         {
           if (rep != NULL)
             freeReplyObject (rep);
@@ -961,9 +864,9 @@ redis_get_nvt_all (kb_t kb, const char *oid)
       nvti_set_required_ports (nvti, rep->element[NVT_REQUIRED_PORTS_POS]->str);
       nvti_set_dependencies (nvti, rep->element[NVT_DEPENDENCIES_POS]->str);
       nvti_set_tag (nvti, rep->element[NVT_TAGS_POS]->str);
-      nvti_set_cve (nvti, rep->element[NVT_CVES_POS]->str);
-      nvti_set_bid (nvti, rep->element[NVT_BIDS_POS]->str);
-      nvti_set_xref (nvti, rep->element[NVT_XREFS_POS]->str);
+      nvti_add_refs (nvti, "cve", rep->element[NVT_CVES_POS]->str, "");
+      nvti_add_refs (nvti, "bid", rep->element[NVT_BIDS_POS]->str, "");
+      nvti_add_refs (nvti, NULL, rep->element[NVT_XREFS_POS]->str, "");
       nvti_set_category (nvti, atoi (rep->element[NVT_CATEGORY_POS]->str));
       nvti_set_timeout (nvti, atoi (rep->element[NVT_TIMEOUT_POS]->str));
       nvti_set_family (nvti, rep->element[NVT_FAMILY_POS]->str);
@@ -1015,7 +918,6 @@ redis_get_pattern (kb_t kb, const char *pattern)
   struct kb_item *kbi = NULL;
   redisReply *rep;
   unsigned int i;
-  redisContext *ctx;
 
   kbr = redis_kb (kb);
   rep = redis_cmd (kbr, "KEYS %s", pattern);
@@ -1027,16 +929,17 @@ redis_get_pattern (kb_t kb, const char *pattern)
       return NULL;
     }
 
-  ctx = get_redis_ctx (kbr);
+  if (get_redis_ctx (kbr) < 0)
+    return NULL;
   for (i = 0; i < rep->elements; i++)
-    redisAppendCommand (ctx, "LRANGE %s 0 -1", rep->element[i]->str);
+    redisAppendCommand (kbr->rctx, "LRANGE %s 0 -1", rep->element[i]->str);
 
   for (i = 0; i < rep->elements; i++)
     {
       struct kb_item *tmp;
       redisReply *rep_range;
 
-      redisGetReply (ctx, (void **) &rep_range);
+      redisGetReply (kbr->rctx, (void **) &rep_range);
       if (!rep)
         continue;
       tmp = redis2kbitem (rep->element[i]->str, rep_range);
@@ -1171,7 +1074,9 @@ redis_add_str_unique (kb_t kb, const char *name, const char *str, size_t len)
   redisContext *ctx;
 
   kbr = redis_kb (kb);
-  ctx = get_redis_ctx (kbr);
+  if (get_redis_ctx (kbr) < 0)
+    return -1;
+  ctx = kbr->rctx;
 
   /* Some VTs still rely on values being unique (ie. a value inserted multiple
    * times, will only be present once.)
@@ -1251,7 +1156,9 @@ redis_set_str (kb_t kb, const char *name, const char *val, size_t len)
   int rc = 0, i = 4;
 
   kbr = redis_kb (kb);
-  ctx = get_redis_ctx (kbr);
+  if (get_redis_ctx (kbr) < 0)
+    return -1;
+  ctx = kbr->rctx;
   redisAppendCommand (ctx, "MULTI");
   redisAppendCommand (ctx, "DEL %s", name);
   if (len == 0)
@@ -1287,7 +1194,9 @@ redis_add_int_unique (kb_t kb, const char *name, int val)
   redisContext *ctx;
 
   kbr = redis_kb (kb);
-  ctx = get_redis_ctx (kbr);
+  if (get_redis_ctx (kbr) < 0)
+    return -1;
+  ctx = kbr->rctx;
   redisAppendCommand (ctx, "LREM %s 1 %d", name, val);
   redisAppendCommand (ctx, "RPUSH %s %d", name, val);
   redisGetReply (ctx, (void **) &rep);
@@ -1340,11 +1249,15 @@ redis_add_int (kb_t kb, const char *name, int val)
 static int
 redis_set_int (kb_t kb, const char *name, int val)
 {
+  struct kb_redis *kbr;
   redisReply *rep = NULL;
   redisContext *ctx;
   int rc = 0, i = 4;
 
-  ctx = get_redis_ctx (redis_kb (kb));
+  kbr = redis_kb (kb);
+  if (get_redis_ctx (redis_kb (kb)) < 0)
+    return -1;
+  ctx = kbr->rctx;
   redisAppendCommand (ctx, "MULTI");
   redisAppendCommand (ctx, "DEL %s", name);
   redisAppendCommand (ctx, "RPUSH %s %d", name, val);
@@ -1374,10 +1287,15 @@ redis_add_nvt (kb_t kb, const nvti_t *nvt, const char *filename)
   struct kb_redis *kbr;
   redisReply *rep = NULL;
   int rc = 0;
-  GSList *element;
+  unsigned int i;
+  gchar *cves, *bids, *xrefs;
 
   if (!nvt || !filename)
     return -1;
+
+  cves = nvti_refs (nvt, "cve", "", 0);
+  bids = nvti_refs (nvt, "bid", "", 0);
+  xrefs = nvti_refs (nvt, NULL, "cve,bid", 1);
 
   kbr = redis_kb (kb);
   rep = redis_cmd (
@@ -1385,28 +1303,30 @@ redis_add_nvt (kb_t kb, const nvti_t *nvt, const char *filename)
     nvti_oid (nvt), filename, nvti_required_keys (nvt) ?: "",
     nvti_mandatory_keys (nvt) ?: "", nvti_excluded_keys (nvt) ?: "",
     nvti_required_udp_ports (nvt) ?: "", nvti_required_ports (nvt) ?: "",
-    nvti_dependencies (nvt) ?: "", nvti_tag (nvt) ?: "", nvti_cve (nvt) ?: "",
-    nvti_bid (nvt) ?: "", nvti_xref (nvt) ?: "", nvti_category (nvt),
+    nvti_dependencies (nvt) ?: "", nvti_tag (nvt) ?: "", cves ?: "",
+    bids ?: "", xrefs ?: "", nvti_category (nvt),
     nvti_timeout (nvt), nvti_family (nvt), nvti_name (nvt));
+  g_free (cves);
+  g_free (bids);
+  g_free (xrefs);
   if (rep == NULL || rep->type == REDIS_REPLY_ERROR)
     rc = -1;
   if (rep != NULL)
     freeReplyObject (rep);
 
-  element = nvt->prefs;
-  if (g_slist_length (element))
-    rep = redis_cmd (kbr, "DEL oid:%s:prefs", nvti_oid (nvt));
-  while (element)
+  if (nvti_pref_len (nvt))
+    redis_cmd (kbr, "DEL oid:%s:prefs", nvti_oid (nvt));
+  for (i = 0; i < nvti_pref_len (nvt); i++)
     {
-      nvtpref_t *pref = element->data;
+      const nvtpref_t *pref = nvti_pref (nvt, i);
 
-      rep = redis_cmd (kbr, "RPUSH oid:%s:prefs %s|||%s|||%s", nvti_oid (nvt),
-                       pref->name, pref->type, pref->dflt);
+      rep = redis_cmd (kbr, "RPUSH oid:%s:prefs %d|||%s|||%s|||%s",
+                       nvti_oid (nvt), nvtpref_id (pref), nvtpref_name (pref),
+                       nvtpref_type (pref), nvtpref_default (pref));
       if (!rep || rep->type == REDIS_REPLY_ERROR)
         rc = -1;
       if (rep)
         freeReplyObject (rep);
-      element = element->next;
     }
   rep = redis_cmd (kbr, "RPUSH filename:%s %lu %s", filename, time (NULL),
                    nvti_oid (nvt));
@@ -1464,7 +1384,7 @@ redis_flush_all (kb_t kb, const char *except)
       if (kbr->rctx == NULL || kbr->rctx->err)
         {
           g_log (G_LOG_DOMAIN, G_LOG_LEVEL_CRITICAL,
-                 "%s: redis connection error: %s", __func__,
+                 "%s: redis connection error to %s: %s", __func__, kbr->path,
                  kbr->rctx ? kbr->rctx->errstr : strerror (ENOMEM));
           redisFree (kbr->rctx);
           kbr->rctx = NULL;
@@ -1485,7 +1405,6 @@ redis_flush_all (kb_t kb, const char *except)
       if (rep == NULL || rep->type != REDIS_REPLY_STATUS)
         {
           freeReplyObject (rep);
-          sleep (KB_RETRY_DELAY);
           redisFree (kbr->rctx);
           kbr->rctx = NULL;
         }

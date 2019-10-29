@@ -21,7 +21,7 @@ cmake_minimum_required(VERSION 3.0)
 message ("-- Configuring the Greenbone Vulnerability Management Libraries...")
 
 project (gvm-libs
-  VERSION 10.0.0
+  VERSION 11.0.0
   LANGUAGES C)
 
 if (POLICY CMP0005)
@@ -81,6 +81,10 @@ if (NOT CMAKE_BUILD_TYPE MATCHES "Release")
     endif (GIT_FOUND)
   endif (EXISTS "${CMAKE_SOURCE_DIR}/.git/")
 endif (NOT CMAKE_BUILD_TYPE MATCHES "Release")
+
+# Set beta version if this is a beta release series,
+# unset if this is a stable release series.
+set (PROJECT_BETA_RELEASE 0)
 
 if (GIT_REVISION)
   set (PROJECT_VERSION_GIT "${GIT_REVISION}")
@@ -179,6 +183,14 @@ if (NOT GVM_SYSCONF_DIR)
   set (GVM_SYSCONF_DIR "${SYSCONFDIR}/gvm")
 endif (NOT GVM_SYSCONF_DIR)
 
+
+if (NOT REDIS_SOCKET_PATH)
+  set (REDIS_SOCKET_PATH "/run/redis/redis.sock")
+endif ()
+
+add_definitions (-DREDIS_SOCKET_PATH="${REDIS_SOCKET_PATH}")
+message ("-- Using redis socket ${REDIS_SOCKET_PATH}")
+
 message ("-- Install prefix: ${CMAKE_INSTALL_PREFIX}")
 
 if (ENABLE_COVERAGE)
@@ -206,6 +218,10 @@ configure_file (doc/Doxyfile.in ${CMAKE_BINARY_DIR}/doc/Doxyfile @ONLY)
 configure_file (doc/Doxyfile_full.in ${CMAKE_BINARY_DIR}/doc/Doxyfile_full @ONLY)
 configure_file (doc/Doxyfile_xml.in ${CMAKE_BINARY_DIR}/doc/Doxyfile_xml @ONLY)
 configure_file (VERSION.in ${CMAKE_BINARY_DIR}/VERSION @ONLY)
+
+## Testing
+
+enable_testing ()
 
 ## Program
 

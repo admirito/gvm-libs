@@ -3,13 +3,20 @@
 # gvm-libs
 
 [![GitHub releases](https://img.shields.io/github/release/greenbone/gvm-libs.svg)](https://github.com/greenbone/gvm-libs/releases)
-[![Code Documentation Coverage](https://img.shields.io/codecov/c/github/greenbone/gvm-libs.svg?label=Doc%20Coverage&logo=codecov)](https://codecov.io/gh/greenbone/gvm-libs)
-[![CircleCI](https://circleci.com/gh/greenbone/gvm-libs/tree/gvm-libs-10.0.svg?style=svg)](https://circleci.com/gh/greenbone/gvm-libs/tree/gvm-libs-10.0)
+[![Code Documentation Coverage](https://img.shields.io/codecov/c/github/greenbone/gvm-libs/gvm-libs-11.0.svg?label=Doc%20Coverage&logo=codecov)](https://codecov.io/gh/greenbone/gvm-libs)
+[![CircleCI](https://circleci.com/gh/greenbone/gvm-libs/tree/gvm-libs-11.0.svg?style=svg)](https://circleci.com/gh/greenbone/gvm-libs/tree/gvm-libs-11.0)
 
 This is the libraries module for the Greenbone Vulnerability Management Solution.
 
 It is used for the Greenbone Security Manager appliances and provides various
 functionalities to support the integrated service daemons.
+
+## Releases
+￼
+All [release files](https://github.com/greenbone/gvm-libs/releases) are signed with
+the [Greenbone Community Feed integrity key](https://community.greenbone.net/t/gcf-managing-the-digital-signatures/101).
+This gpg key can be downloaded at https://www.greenbone.net/GBCommunitySigningKey.asc
+and the fingerprint is `8AE4 BE42 9B60 A59B 311C  2E73 9823 FAA6 0ED1 E580`.
 
 ## Installation
 

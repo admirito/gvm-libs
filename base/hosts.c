@@ -1078,7 +1078,7 @@ gvm_hosts_new_with_max (const gchar *hosts_str, unsigned int max_hosts)
             gvm_host_t *host = gvm_host_new ();
             host->type = host_type;
             if (host_type == HOST_TYPE_NAME)
-              host->name = g_strdup (stripped);
+              host->name = g_ascii_strdown (stripped, -1);
             else if (host_type == HOST_TYPE_IPV4)
               {
                 if (inet_pton (AF_INET, stripped, &host->addr) != 1)
@@ -1329,11 +1329,14 @@ gvm_hosts_reverse (gvm_hosts_t *hosts)
  * iterator.
  *
  * @param[in] hosts         The hosts collection from which to exclude.
+ *
+ * @return List of unresolved hostnames.
  */
-void
+GSList *
 gvm_hosts_resolve (gvm_hosts_t *hosts)
 {
-  size_t i, new_entries = 0;
+  size_t i, new_entries = 0, resolved = 0;
+  GSList *unresolved = NULL;
 
   for (i = 0; i < hosts->count; i++)
     {
@@ -1372,19 +1375,21 @@ gvm_hosts_resolve (gvm_hosts_t *hosts)
         }
       /* Remove hostname from list, as it was either replaced by IPs, or
        * is unresolvable. */
-      gvm_host_free (host);
       hosts->hosts[i] = NULL;
-      hosts->count--;
-      hosts->removed++;
+      resolved++;
       if (!list)
-        g_warning ("Couldn't resolve hostname %s", host->name);
-      else
-        gvm_hosts_fill_gaps (hosts);
+        unresolved = g_slist_prepend (unresolved, g_strdup (host->name));
+      gvm_host_free (host);
       g_slist_free_full (list, g_free);
     }
+  if (resolved)
+    gvm_hosts_fill_gaps (hosts);
+  hosts->count -= resolved;
+  hosts->removed += resolved;
   if (new_entries)
     gvm_hosts_deduplicate (hosts);
   hosts->current = 0;
+  return unresolved;
 }
 
 /**
@@ -1419,7 +1424,7 @@ gvm_vhosts_exclude (gvm_host_t *host, const char *excluded_str)
 
       while (*tmp)
         {
-          if (!strcmp (value, g_strstrip (*tmp)))
+          if (!strcasecmp (value, g_strstrip (*tmp)))
             {
               gvm_vhost_free (vhost->data);
               host->vhosts = vhost = g_slist_delete_link (host->vhosts, vhost);
@@ -1540,48 +1545,45 @@ gvm_hosts_exclude (gvm_hosts_t *hosts, const char *excluded_str)
 char *
 gvm_host_reverse_lookup (gvm_host_t *host)
 {
-  if (host == NULL)
+  int retry = 2;
+  gchar hostname[NI_MAXHOST];
+  void *addr;
+  size_t addrlen;
+  struct sockaddr_in sa;
+  struct sockaddr_in6 sa6;
+
+  if (!host)
     return NULL;
 
-  if (host->type == HOST_TYPE_NAME)
-    return NULL;
-  else if (host->type == HOST_TYPE_IPV4)
+  if (host->type == HOST_TYPE_IPV4)
     {
-      struct sockaddr_in sa;
-      int retry = 2;
-      gchar hostname[1000];
-
-      bzero (&sa, sizeof (struct sockaddr));
+      addr = &sa;
+      addrlen = sizeof (sa);
+      memset (addr, '\0', addrlen);
       sa.sin_addr = host->addr;
       sa.sin_family = AF_INET;
-      while (retry--)
-        {
-          int ret = getnameinfo ((struct sockaddr *) &sa, sizeof (sa), hostname,
-                                 sizeof (hostname), NULL, 0, NI_NAMEREQD);
-          if (!ret)
-            return g_strdup (hostname);
-          if (ret != EAI_AGAIN)
-            break;
-        }
-      return NULL;
     }
   else if (host->type == HOST_TYPE_IPV6)
     {
-      struct sockaddr_in6 sa;
-      char hostname[1000];
-
-      bzero (&sa, sizeof (struct sockaddr));
-      memcpy (&sa.sin6_addr, &host->addr6, 16);
-      sa.sin6_family = AF_INET6;
-
-      if (getnameinfo ((struct sockaddr *) &sa, sizeof (sa), hostname,
-                       sizeof (hostname), NULL, 0, NI_NAMEREQD))
-        return NULL;
-      else
-        return g_strdup (hostname);
+      addr = &sa6;
+      addrlen = sizeof (sa6);
+      memset (&sa6, '\0', addrlen);
+      memcpy (&sa6.sin6_addr, &host->addr6, 16);
+      sa6.sin6_family = AF_INET6;
     }
   else
     return NULL;
+
+  while (retry--)
+    {
+      int ret = getnameinfo (addr, addrlen, hostname, sizeof (hostname), NULL,
+                             0, NI_NAMEREQD);
+      if (!ret)
+        return g_ascii_strdown (hostname, -1);
+      if (ret != EAI_AGAIN)
+        break;
+    }
+  return NULL;
 }
 
 /**
@@ -1607,7 +1609,7 @@ host_name_verify (gvm_host_t *host, const char *value)
     {
       char buffer[INET6_ADDRSTRLEN];
       addr6_to_str (tmp->data, buffer);
-      if (!strcmp (host_str, buffer))
+      if (!strcasecmp (host_str, buffer))
         {
           ret = 0;
           break;
@@ -1646,7 +1648,7 @@ gvm_host_add_reverse_lookup (gvm_host_t *host)
   vhosts = host->vhosts;
   while (vhosts)
     {
-      if (!strcmp (((gvm_vhost_t *) vhosts->data)->value, value))
+      if (!strcasecmp (((gvm_vhost_t *) vhosts->data)->value, value))
         {
           g_free (value);
           return;
