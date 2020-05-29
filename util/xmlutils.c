@@ -33,6 +33,8 @@
 #include <fcntl.h>       /* for fcntl, F_SETFL, O_NONBLOCK */
 #include <glib.h>        /* for g_free, GSList, g_markup_parse_context_free */
 #include <glib/gtypes.h> /* for GPOINTER_TO_INT, GINT_TO_POINTER, gsize */
+#include <libxml/parser.h>
+#include <libxml/tree.h>
 #include <string.h>      /* for strcmp, strerror, strlen */
 #include <time.h>        /* for time, time_t */
 #include <unistd.h>      /* for ssize_t */
@@ -272,6 +274,33 @@ add_attributes (entity_t entity, const gchar **names, const gchar **values)
  * @param[in]  error             Error parameter.
  */
 static void
+ignore_start_element (GMarkupParseContext *context, const gchar *element_name,
+                      const gchar **attribute_names,
+                      const gchar **attribute_values, gpointer user_data,
+                      GError **error)
+{
+  context_data_t *data = (context_data_t *) user_data;
+
+  (void) context;
+  (void) element_name;
+  (void) attribute_names;
+  (void) attribute_values;
+  (void) error;
+
+  data->current = GINT_TO_POINTER (GPOINTER_TO_INT (data->current) + 1);
+}
+
+/**
+ * @brief Handle the start of an OMP XML element.
+ *
+ * @param[in]  context           Parser context.
+ * @param[in]  element_name      XML element name.
+ * @param[in]  attribute_names   XML attribute name.
+ * @param[in]  attribute_values  XML attribute values.
+ * @param[in]  user_data         Dummy parameter.
+ * @param[in]  error             Error parameter.
+ */
+static void
 handle_start_element (GMarkupParseContext *context, const gchar *element_name,
                       const gchar **attribute_names,
                       const gchar **attribute_values, gpointer user_data,
@@ -325,6 +354,29 @@ xml_handle_start_element (context_data_t *context, const gchar *element_name,
  * @param[in]  error             Error parameter.
  */
 static void
+ignore_end_element (GMarkupParseContext *context, const gchar *element_name,
+                    gpointer user_data, GError **error)
+{
+  context_data_t *data = (context_data_t *) user_data;
+
+  (void) context;
+  (void) element_name;
+  (void) error;
+
+  data->current = GINT_TO_POINTER (GPOINTER_TO_INT (data->current) - 1);
+  if (data->current == NULL)
+    data->done = TRUE;
+}
+
+/**
+ * @brief Handle the end of an XML element.
+ *
+ * @param[in]  context           Parser context.
+ * @param[in]  element_name      XML element name.
+ * @param[in]  user_data         Dummy parameter.
+ * @param[in]  error             Error parameter.
+ */
+static void
 handle_end_element (GMarkupParseContext *context, const gchar *element_name,
                     gpointer user_data, GError **error)
 {
@@ -364,6 +416,26 @@ void
 xml_handle_end_element (context_data_t *context, const gchar *element_name)
 {
   handle_end_element (NULL, element_name, context, NULL);
+}
+
+/**
+ * @brief Handle additional text of an XML element.
+ *
+ * @param[in]  context           Parser context.
+ * @param[in]  text              The text.
+ * @param[in]  text_len          Length of the text.
+ * @param[in]  user_data         Dummy parameter.
+ * @param[in]  error             Error parameter.
+ */
+static void
+ignore_text (GMarkupParseContext *context, const gchar *text, gsize text_len,
+             gpointer user_data, GError **error)
+{
+  (void) context;
+  (void) text;
+  (void) text_len;
+  (void) user_data;
+  (void) error;
 }
 
 /**
@@ -485,9 +557,18 @@ try_read_entity_and_string (gnutls_session_t *session, int timeout,
 
   /* Create the XML parser. */
 
-  xml_parser.start_element = handle_start_element;
-  xml_parser.end_element = handle_end_element;
-  xml_parser.text = handle_text;
+  if (entity)
+    {
+      xml_parser.start_element = handle_start_element;
+      xml_parser.end_element = handle_end_element;
+      xml_parser.text = handle_text;
+    }
+  else
+    {
+      xml_parser.start_element = ignore_start_element;
+      xml_parser.end_element = ignore_end_element;
+      xml_parser.text = ignore_text;
+    }
   xml_parser.passthrough = NULL;
   xml_parser.error = handle_error;
 
@@ -623,7 +704,8 @@ try_read_entity_and_string (gnutls_session_t *session, int timeout,
               g_free (buffer);
               return -2;
             }
-          *entity = (entity_t) context_data.first->data;
+          if (entity)
+            *entity = (entity_t) context_data.first->data;
           if (string)
             *string_return = string;
           if (timeout > 0)
@@ -703,9 +785,18 @@ try_read_entity_and_string_s (int socket, int timeout, entity_t *entity,
 
   /* Create the XML parser. */
 
-  xml_parser.start_element = handle_start_element;
-  xml_parser.end_element = handle_end_element;
-  xml_parser.text = handle_text;
+  if (entity)
+    {
+      xml_parser.start_element = handle_start_element;
+      xml_parser.end_element = handle_end_element;
+      xml_parser.text = handle_text;
+    }
+  else
+    {
+      xml_parser.start_element = ignore_start_element;
+      xml_parser.end_element = ignore_end_element;
+      xml_parser.text = ignore_text;
+    }
   xml_parser.passthrough = NULL;
   xml_parser.error = handle_error;
 
@@ -746,6 +837,8 @@ try_read_entity_and_string_s (int socket, int timeout, entity_t *entity,
                                        __FUNCTION__, strerror (errno));
                           g_markup_parse_context_free (xml_context);
                           g_free (buffer);
+                          if (string && *string_return == NULL)
+                            g_string_free (string, TRUE);
                           return -4;
                         }
                     }
@@ -836,9 +929,12 @@ try_read_entity_and_string_s (int socket, int timeout, entity_t *entity,
                 fcntl (socket, F_SETFL, 0L);
               g_markup_parse_context_free (xml_context);
               g_free (buffer);
+              if (string && *string_return == NULL)
+                g_string_free (string, TRUE);
               return -2;
             }
-          *entity = (entity_t) context_data.first->data;
+          if (entity)
+            *entity = (entity_t) context_data.first->data;
           if (string)
             *string_return = string;
           if (timeout > 0)
@@ -858,6 +954,8 @@ try_read_entity_and_string_s (int socket, int timeout, entity_t *entity,
                        strerror (errno));
           g_markup_parse_context_free (xml_context);
           g_free (buffer);
+          if (string && *string_return == NULL)
+            g_string_free (string, TRUE);
           return -1;
         }
     }
@@ -1001,13 +1099,7 @@ read_string (gnutls_session_t *session, GString **string)
 int
 read_string_c (gvm_connection_t *connection, GString **string)
 {
-  int ret = 0;
-  entity_t entity;
-
-  if (!(ret = read_entity_and_string_c (connection, &entity, string)))
-    free_entity (entity);
-
-  return ret;
+  return read_entity_and_string_c (connection, NULL, string);
 }
 
 /**
@@ -1182,8 +1274,11 @@ static void
 foreach_print_attribute_to_string (gpointer name, gpointer value,
                                    gpointer string)
 {
+  gchar *text_escaped;
+  text_escaped = g_markup_escape_text ((gchar *) value, -1);
   g_string_append_printf ((GString *) string, " %s=\"%s\"", (char *) name,
-                          (char *) value);
+                          text_escaped);
+  g_free (text_escaped);
 }
 
 /**
@@ -1566,3 +1661,247 @@ find_element_in_xml_file (gchar *file_path, gchar *find_element,
   return search_data.found;
 }
 #undef XML_FILE_BUFFER_SIZE
+
+
+/* The new faster parser that uses libxml2. */
+
+/**
+ * @brief Read an XML element tree from a string.
+ *
+ * Caller must not free string until caller is finished using element.
+ *
+ * @param[in]   string   Input string.
+ * @param[out]  element  Location for parsed element tree, or NULL if not
+ *                       required.   If given, set to NULL on failure.
+ *                       Free with element_free.
+ *
+ * @return 0 success, -1 read error, -2 parse error, -3 XML ended prematurely,
+ *         -4 setup error.
+ */
+int
+parse_element (const gchar *string, element_t *element)
+{
+  xmlDocPtr doc;
+
+  LIBXML_TEST_VERSION
+
+  if (element)
+    *element = NULL;
+
+  if (xmlMemSetup (g_free, g_malloc, g_realloc, g_strdup))
+    return -4;
+
+  doc = xmlReadMemory (string, strlen (string), "noname.xml", NULL, 0);
+  if (doc == NULL)
+    return -2;
+
+  if (element)
+    *element = xmlDocGetRootElement (doc);
+
+  return 0;
+}
+
+/**
+ * @brief Free an entire element tree.
+ *
+ * Beware that this frees the entire tree that element is part of, including
+ * any ancestors.
+ *
+ * @param[in]  element  Element.
+ */
+void
+element_free (element_t element)
+{
+  if (element)
+    {
+      assert (element->doc);
+      xmlFreeDoc (element->doc);
+    }
+}
+
+/**
+ * @brief Get the name of an element.
+ *
+ * @param[in]  element  Element.
+ *
+ * @return Element name.
+ */
+const gchar *
+element_name (element_t element)
+{
+  if (element
+      && (element->type == XML_ELEMENT_NODE))
+    return (const gchar *) element->name;
+
+  return "";
+}
+
+/**
+ * @brief Find child in an element.
+ *
+ * @param[in]  element  Element.
+ * @param[in]  name     Name of child.
+ *
+ * @return Child if found, else NULL.
+ */
+static element_t
+find_child (element_t element, const gchar *name)
+{
+  for (xmlNode *node = element->children; node; node = node->next)
+    if (xmlStrcmp (node->name, (const xmlChar *) name) == 0)
+      return node;
+  return NULL;
+}
+
+/**
+ * @brief Get a child of an element.
+ *
+ * @param[in]  element  Element.
+ * @param[in]  name    Name of the child.
+ *
+ * @return Element if found, else NULL.
+ */
+element_t
+element_child (element_t element, const gchar *name)
+{
+  const gchar *stripped_name;
+
+  if (!element)
+    return NULL;
+
+  stripped_name = strchr (name, ':');
+  if (stripped_name)
+    {
+       element_t child;
+
+       /* There was a namespace in the name.
+        *
+        * First try without the namespace, because libxml2 doesn't consider the
+        * namespace in the name when the namespace is defined. */
+
+      stripped_name++;
+
+      if (*stripped_name == '\0')
+        /* Don't search for child with empty stripped name, because we'll
+         * find text nodes.  But search with just the namespace for glib
+         * compatibility. */
+        return find_child (element, name);
+
+      child = find_child (element, stripped_name);
+      if (child)
+       return child;
+
+      /* Didn't find anything. */
+    }
+
+  /* There was no namespace, or we didn't find anything without the namespace.
+   *
+   * Try with the full name. */
+
+  return find_child (element, name);
+}
+
+/**
+ * @brief Get text of an element.
+ *
+ * If element is not NULL then the return is guaranteed to be a string.
+ * So if the caller has NULL checked element then there is no need for
+ * the caller to NULL check the return.
+ *
+ * @param[in]  element  Element.
+ *
+ * @return NULL if element is NULL, else the text.  Caller must g_free.
+ */
+gchar *
+element_text (element_t element)
+{
+  gchar *string;
+
+  if (!element)
+    return NULL;
+
+  string = (gchar *) xmlNodeListGetString (element->doc, element->xmlChildrenNode, 1);
+  if (string)
+    return string;
+  string = xmlMalloc (1);
+  string[0] = '\0';
+  return string;
+}
+
+/**
+ * @brief Get an attribute of an element.
+ *
+ * @param[in]  element  Element.
+ * @param[in]  name     Name of the attribute.
+ *
+ * @return Attribute value if found, else NULL.  Caller must g_free.
+ */
+gchar *
+element_attribute (element_t element, const gchar *name)
+{
+  const gchar *stripped_name;
+
+  if (!element)
+    return NULL;
+
+  stripped_name = strchr (name, ':');
+  if (stripped_name)
+    {
+       gchar *attribute;
+
+       /* There was a namespace in the name.
+        *
+        * First try without the namespace, because libxml2 doesn't consider the
+        * namespace in the name when the namespace is defined. */
+
+      stripped_name++;
+
+      if (*stripped_name == '\0')
+        /* Don't search for child with empty stripped name, because we'll
+         * find text nodes.  But search with just the namespace for glib
+         * compatibility. */
+        return (gchar *) xmlGetProp (element, (const xmlChar *) name);
+
+      attribute = (gchar *) xmlGetProp (element, (const xmlChar *) stripped_name);
+      if (attribute)
+       return attribute;
+
+      /* Didn't find anything. */
+    }
+
+  /* There was no namespace, or we didn't find anything without the namespace.
+   *
+   * Try with the full name. */
+
+  return (gchar *) xmlGetProp (element, (const xmlChar *) name);
+}
+
+/**
+ * @brief Get the first child of an element.
+ *
+ * @param[in]  element  Element.
+ *
+ * @return Child if there is one, else NULL.
+ */
+element_t
+element_first_child (element_t element)
+{
+  if (element)
+    return element->children;
+  return NULL;
+}
+
+/**
+ * @brief Get the next sibling of an element
+ *
+ * @param[in]  element  Element.
+ *
+ * @return Next sibling element if there is one, else NULL.
+ */
+element_t
+element_next (element_t element)
+{
+  if (element)
+    return element->next;
+  return NULL;
+}

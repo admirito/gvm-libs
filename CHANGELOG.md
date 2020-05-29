@@ -4,11 +4,32 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [11.0.1] (2020-05-12)
+
+### Added
+- Add option to set finished hosts in OSP targets [#298](https://github.com/greenbone/gvm-libs/pull/298)
+- Add a fast memory-only XML parser [#299](https://github.com/greenbone/gvm-libs/pull/299)
+- Add new function gvm_libs_version [#301](https://github.com/greenbone/gvm-libs/pull/301)
+
+### Changed
+- Don't create an entity tree during read_string_c. [#305](https://github.com/greenbone/gvm-libs/pull/305)
+
+### Fixed
+- Fix sigsegv when no plugin_feed_info.inc file present. [#278](https://github.com/greenbone/gvm-libs/pull/278)
+- Fix missing linking to libgnutls in util/CMakeLists.txt. [#291](https://github.com/greenbone/gvm-libs/pull/291)
+- Free string in all error exit cases [#308](https://github.com/greenbone/gvm-libs/pull/308)
+- Fix trust and file handling for S/MIME [#309](https://github.com/greenbone/gvm-libs/pull/309)
+- Get details with get_reports in gmp_get_report_ext [#313](https://github.com/greenbone/gvm-libs/pull/313)
+- Fix escaping entity attributes in print_entity_to_string [#318](https://github.com/greenbone/gvm-libs/pull/318)
+- Fix is_cidr_block() [#323][https://github.com/greenbone/gvm-libs/pull/323]
+
+[11.0.1]: https://github.com/greenbone/gvm-libs/compare/v11.0.0...v11.0.1
+
 ## [11.0.0] (2019-10-11)
 
 ### Added
 - Allow to configure the path to the redis socket via CMake [#256](https://github.com/greenbone/gvm-libs/pull/256)
-- A new data model for unified handling of cross references in the NVT meta data as been added. All previous API elements to handle cve, bid, xref werehas been removed. [#225](https://github.com/greenbone/gvm-libs/pull/225) [#232](https://github.com/greenbone/gvm-libs/pull/232).
+- A new data model for unified handling of cross references in the NVT meta data as been added. All previous API elements to handle cve, bid, xref have been removed. [#225](https://github.com/greenbone/gvm-libs/pull/225) [#232](https://github.com/greenbone/gvm-libs/pull/232).
 - Add function to get an osp scan status and a enum type for the different status [#259](https://github.com/greenbone/gvm-libs/pull/259)
 - API functions for NVTI to handle timestamps [#261](https://github.com/greenbone/gvm-libs/pull/261)
 - API function for NVTI to add a single tag [#263](https://github.com/greenbone/gvm-libs/pull/263)
@@ -34,6 +55,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Fixed
 - Prevent g_strsplit to be called with NULL. [#238](https://github.com/greenbone/gvm-libs/pull/238)
 - Check filter before using it in osp_get_vts_ext. [#266](https://github.com/greenbone/gvm-libs/pull/266)
+- Fix is_cidr_block(). [#323](https://github.com/greenbone/gvm-libs/pull/323)
 
 ### Removed
 - Remove inconsistent delays in kb routines. [#230](https://github.com/greenbone/gvm-libs/pull/230)
