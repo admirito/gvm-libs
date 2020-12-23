@@ -1,4 +1,4 @@
-/* Copyright (C) 2009-2019 Greenbone Networks GmbH
+/* Copyright (C) 2009-2021 Greenbone Networks GmbH
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
@@ -105,7 +105,11 @@ nvti_solution (const nvti_t *);
 gchar *
 nvti_solution_type (const nvti_t *);
 gchar *
+nvti_solution_method (const nvti_t *);
+gchar *
 nvti_tag (const nvti_t *);
+gchar *
+nvti_get_tag (const nvti_t *, const gchar *);
 gchar *
 nvti_cvss_base (const nvti_t *);
 gchar *
@@ -124,6 +128,8 @@ gchar *
 nvti_detection (const nvti_t *);
 gchar *
 nvti_qod_type (const nvti_t *);
+gchar *
+nvti_qod (const nvti_t *);
 gint
 nvti_timeout (const nvti_t *);
 gint
@@ -156,6 +162,8 @@ nvti_set_solution (nvti_t *, const gchar *);
 int
 nvti_set_solution_type (nvti_t *, const gchar *);
 int
+nvti_set_solution_method (nvti_t *, const gchar *);
+int
 nvti_add_tag (nvti_t *, const gchar *, const gchar *);
 int
 nvti_set_tag (nvti_t *, const gchar *);
@@ -177,6 +185,8 @@ int
 nvti_set_detection (nvti_t *, const gchar *);
 int
 nvti_set_qod_type (nvti_t *, const gchar *);
+int
+nvti_set_qod (nvti_t *, const gchar *);
 int
 nvti_set_timeout (nvti_t *, const gint);
 int

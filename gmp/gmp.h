@@ -1,4 +1,4 @@
-/* Copyright (C) 2009-2019 Greenbone Networks GmbH
+/* Copyright (C) 2009-2021 Greenbone Networks GmbH
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
@@ -323,6 +323,19 @@ gmp_start_task_report (gnutls_session_t *, const char *, char **);
 
 int
 gmp_start_task_report_c (gvm_connection_t *, const char *, char **);
+
+/**
+ * @brief Struct holding options for gmp start_task command.
+ */
+typedef struct
+{
+  const char *task_id; ///< ID of task.
+} gmp_start_task_opts_t;
+
+static const gmp_start_task_opts_t gmp_start_task_opts_defaults = {NULL};
+
+int
+gmp_start_task_ext_c (gvm_connection_t *, gmp_start_task_opts_t);
 
 int
 gmp_stop_task (gnutls_session_t *, const char *);

@@ -1,4 +1,4 @@
-/* Copyright (C) 2009-2019 Greenbone Networks GmbH
+/* Copyright (C) 2009-2021 Greenbone Networks GmbH
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
@@ -35,9 +35,9 @@
 #include <glib/gtypes.h> /* for GPOINTER_TO_INT, GINT_TO_POINTER, gsize */
 #include <libxml/parser.h>
 #include <libxml/tree.h>
-#include <string.h>      /* for strcmp, strerror, strlen */
-#include <time.h>        /* for time, time_t */
-#include <unistd.h>      /* for ssize_t */
+#include <string.h> /* for strcmp, strerror, strlen */
+#include <time.h>   /* for time, time_t */
+#include <unistd.h> /* for ssize_t */
 
 #undef G_LOG_DOMAIN
 /**
@@ -587,6 +587,7 @@ try_read_entity_and_string (gnutls_session_t *session, int timeout,
   while (1)
     {
       ssize_t count;
+      int retries = 10;
       while (1)
         {
           g_debug ("   asking for %i\n", BUFFER_SIZE);
@@ -604,13 +605,25 @@ try_read_entity_and_string (gnutls_session_t *session, int timeout,
                       g_warning ("   timeout\n");
                       if (fcntl (socket, F_SETFL, 0L) < 0)
                         g_warning ("%s :failed to set socket flag: %s",
-                                   __FUNCTION__, strerror (errno));
+                                   __func__, strerror (errno));
                       g_markup_parse_context_free (xml_context);
                       g_free (buffer);
                       return -4;
                     }
                   continue;
                 }
+              else if ((timeout == 0) && (count == GNUTLS_E_AGAIN))
+                {
+                  /* Server still busy, try read again.
+                     If there is no timeout set and the server is still not ready,
+                     it will try up to 10 times before closing the socket.*/
+                  if (retries > 0)
+                    {
+                     retries = retries - 1;
+                     continue;
+                    }
+                }
+
               if (count == GNUTLS_E_REHANDSHAKE)
                 /* Try again. TODO Rehandshake. */
                 continue;
@@ -624,8 +637,8 @@ try_read_entity_and_string (gnutls_session_t *session, int timeout,
               if (timeout > 0)
                 {
                   if (fcntl (socket, F_SETFL, 0L) < 0)
-                    g_warning ("%s :failed to set socket flag: %s",
-                               __FUNCTION__, strerror (errno));
+                    g_warning ("%s :failed to set socket flag: %s", __func__,
+                               strerror (errno));
                 }
               g_markup_parse_context_free (xml_context);
               g_free (buffer);
@@ -650,8 +663,8 @@ try_read_entity_and_string (gnutls_session_t *session, int timeout,
               if (timeout > 0)
                 {
                   if (fcntl (socket, F_SETFL, 0L) < 0)
-                    g_warning ("%s :failed to set socket flag: %s",
-                               __FUNCTION__, strerror (errno));
+                    g_warning ("%s :failed to set socket flag: %s", __func__,
+                               strerror (errno));
                 }
               g_markup_parse_context_free (xml_context);
               g_free (buffer);
@@ -679,7 +692,7 @@ try_read_entity_and_string (gnutls_session_t *session, int timeout,
           if (timeout > 0)
             {
               if (fcntl (socket, F_SETFL, 0L) < 0)
-                g_warning ("%s :failed to set socket flag: %s", __FUNCTION__,
+                g_warning ("%s :failed to set socket flag: %s", __func__,
                            strerror (errno));
             }
           g_markup_parse_context_free (xml_context);
@@ -720,7 +733,7 @@ try_read_entity_and_string (gnutls_session_t *session, int timeout,
           g_warning ("   failed to get current time (1): %s\n",
                      strerror (errno));
           if (fcntl (socket, F_SETFL, 0L) < 0)
-            g_warning ("%s :failed to set socket flag: %s", __FUNCTION__,
+            g_warning ("%s :failed to set socket flag: %s", __func__,
                        strerror (errno));
           g_markup_parse_context_free (xml_context);
           g_free (buffer);
@@ -834,7 +847,7 @@ try_read_entity_and_string_s (int socket, int timeout, entity_t *entity,
                           g_warning ("   timeout\n");
                           if (fcntl (socket, F_SETFL, 0L) < 0)
                             g_warning ("%s :failed to set socket flag: %s",
-                                       __FUNCTION__, strerror (errno));
+                                       __func__, strerror (errno));
                           g_markup_parse_context_free (xml_context);
                           g_free (buffer);
                           if (string && *string_return == NULL)
@@ -876,8 +889,8 @@ try_read_entity_and_string_s (int socket, int timeout, entity_t *entity,
               if (timeout > 0)
                 {
                   if (fcntl (socket, F_SETFL, 0L) < 0)
-                    g_warning ("%s :failed to set socket flag: %s",
-                               __FUNCTION__, strerror (errno));
+                    g_warning ("%s :failed to set socket flag: %s", __func__,
+                               strerror (errno));
                 }
               g_markup_parse_context_free (xml_context);
               g_free (buffer);
@@ -906,7 +919,7 @@ try_read_entity_and_string_s (int socket, int timeout, entity_t *entity,
           if (timeout > 0)
             {
               if (fcntl (socket, F_SETFL, 0L) < 0)
-                g_warning ("%s :failed to set socket flag: %s", __FUNCTION__,
+                g_warning ("%s :failed to set socket flag: %s", __func__,
                            strerror (errno));
             }
           g_markup_parse_context_free (xml_context);
@@ -950,7 +963,7 @@ try_read_entity_and_string_s (int socket, int timeout, entity_t *entity,
           g_warning ("   failed to get current time (1): %s\n",
                      strerror (errno));
           if (fcntl (socket, F_SETFL, 0L) < 0)
-            g_warning ("%s :failed to set server socket flag: %s", __FUNCTION__,
+            g_warning ("%s :failed to set server socket flag: %s", __func__,
                        strerror (errno));
           g_markup_parse_context_free (xml_context);
           g_free (buffer);
@@ -1563,7 +1576,7 @@ xml_search_handle_start_element (GMarkupParseContext *ctx,
   if (strcmp (element_name, search_data->find_element) == 0
       && search_data->found == 0)
     {
-      g_debug ("%s: Found element <%s>", __FUNCTION__, element_name);
+      g_debug ("%s: Found element <%s>", __func__, element_name);
 
       if (search_data->find_attributes
           && g_hash_table_size (search_data->find_attributes))
@@ -1581,13 +1594,13 @@ xml_search_handle_start_element (GMarkupParseContext *ctx,
               if (searched_value
                   && strcmp (searched_value, attribute_values[index]) == 0)
                 {
-                  g_debug ("%s: Found attribute %s=\"%s\"", __FUNCTION__,
+                  g_debug ("%s: Found attribute %s=\"%s\"", __func__,
                            attribute_names[index], searched_value);
                   g_hash_table_add (found_attributes, searched_value);
                 }
               index++;
             }
-          g_debug ("%s: Found %d of %d attributes", __FUNCTION__,
+          g_debug ("%s: Found %d of %d attributes", __func__,
                    g_hash_table_size (found_attributes),
                    g_hash_table_size (search_data->find_attributes));
 
@@ -1644,7 +1657,7 @@ find_element_in_xml_file (gchar *file_path, gchar *find_element,
   if (file == NULL)
     {
       g_markup_parse_context_free (xml_context);
-      g_warning ("%s: Failed to open '%s':", __FUNCTION__, strerror (errno));
+      g_warning ("%s: Failed to open '%s':", __func__, strerror (errno));
       return 0;
     }
 
@@ -1661,7 +1674,6 @@ find_element_in_xml_file (gchar *file_path, gchar *find_element,
   return search_data.found;
 }
 #undef XML_FILE_BUFFER_SIZE
-
 
 /* The new faster parser that uses libxml2. */
 
@@ -1729,8 +1741,7 @@ element_free (element_t element)
 const gchar *
 element_name (element_t element)
 {
-  if (element
-      && (element->type == XML_ELEMENT_NODE))
+  if (element && (element->type == XML_ELEMENT_NODE))
     return (const gchar *) element->name;
 
   return "";
@@ -1772,12 +1783,12 @@ element_child (element_t element, const gchar *name)
   stripped_name = strchr (name, ':');
   if (stripped_name)
     {
-       element_t child;
+      element_t child;
 
-       /* There was a namespace in the name.
-        *
-        * First try without the namespace, because libxml2 doesn't consider the
-        * namespace in the name when the namespace is defined. */
+      /* There was a namespace in the name.
+       *
+       * First try without the namespace, because libxml2 doesn't consider the
+       * namespace in the name when the namespace is defined. */
 
       stripped_name++;
 
@@ -1789,7 +1800,7 @@ element_child (element_t element, const gchar *name)
 
       child = find_child (element, stripped_name);
       if (child)
-       return child;
+        return child;
 
       /* Didn't find anything. */
     }
@@ -1820,7 +1831,8 @@ element_text (element_t element)
   if (!element)
     return NULL;
 
-  string = (gchar *) xmlNodeListGetString (element->doc, element->xmlChildrenNode, 1);
+  string =
+    (gchar *) xmlNodeListGetString (element->doc, element->xmlChildrenNode, 1);
   if (string)
     return string;
   string = xmlMalloc (1);
@@ -1847,12 +1859,12 @@ element_attribute (element_t element, const gchar *name)
   stripped_name = strchr (name, ':');
   if (stripped_name)
     {
-       gchar *attribute;
+      gchar *attribute;
 
-       /* There was a namespace in the name.
-        *
-        * First try without the namespace, because libxml2 doesn't consider the
-        * namespace in the name when the namespace is defined. */
+      /* There was a namespace in the name.
+       *
+       * First try without the namespace, because libxml2 doesn't consider the
+       * namespace in the name when the namespace is defined. */
 
       stripped_name++;
 
@@ -1862,9 +1874,10 @@ element_attribute (element_t element, const gchar *name)
          * compatibility. */
         return (gchar *) xmlGetProp (element, (const xmlChar *) name);
 
-      attribute = (gchar *) xmlGetProp (element, (const xmlChar *) stripped_name);
+      attribute =
+        (gchar *) xmlGetProp (element, (const xmlChar *) stripped_name);
       if (attribute)
-       return attribute;
+        return attribute;
 
       /* Didn't find anything. */
     }

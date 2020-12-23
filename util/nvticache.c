@@ -1,4 +1,4 @@
-/* Copyright (C) 2009-2019 Greenbone Networks GmbH
+/* Copyright (C) 2009-2021 Greenbone Networks GmbH
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
@@ -155,10 +155,10 @@ nvt_feed_version ()
   if (!g_file_get_contents (filename, &fcontent, NULL, &error))
     {
       if (error && msg_shown == 0)
-	{
-	  g_warning ("nvt_feed_version: %s", error->message);
-	  msg_shown = 1;
-	}
+        {
+          g_warning ("nvt_feed_version: %s", error->message);
+          msg_shown = 1;
+        }
       g_error_free (error);
       return NULL;
     }
@@ -171,6 +171,16 @@ nvt_feed_version ()
     }
   msg_shown = 0;
   plugin_set = g_strndup (plugin_set + 14, 12);
+  if (g_strstr_len (plugin_set, -1, "\"") || g_strstr_len (plugin_set, -1, ";"))
+    {
+      g_warning ("nvt_feed_version: Erroneous %s format. Format of PLUGIN_SET "
+                 "has to be yyyymmddhhmm. It has to be exactly 12 chars long.",
+                 filename);
+      g_free (plugin_set);
+      g_free (fcontent);
+      return NULL;
+    }
+
   g_free (fcontent);
   return plugin_set;
 }

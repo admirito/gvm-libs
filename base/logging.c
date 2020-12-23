@@ -1,4 +1,4 @@
-/* Copyright (C) 2017-2019 Greenbone Networks GmbH
+/* Copyright (C) 2017-2021 Greenbone Networks GmbH
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
@@ -357,7 +357,7 @@ gvm_log_lock_init (void)
 /**
  * @brief Try to lock logger_mutex.
  */
-static void
+void
 gvm_log_lock (void)
 {
   g_mutex_lock (logger_mutex);
@@ -366,7 +366,7 @@ gvm_log_lock (void)
 /**
  * @brief Unlock logger_mutex.
  */
-static void
+void
 gvm_log_unlock (void)
 {
   g_mutex_unlock (logger_mutex);

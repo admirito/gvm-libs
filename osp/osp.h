@@ -1,4 +1,4 @@
-/* Copyright (C) 2014-2019 Greenbone Networks GmbH
+/* Copyright (C) 2014-2021 Greenbone Networks GmbH
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
@@ -25,8 +25,9 @@
 #ifndef _GVM_OSP_H
 #define _GVM_OSP_H
 
-#include <glib.h> /* for GHashTable, GSList */
 #include "../util/xmlutils.h"
+
+#include <glib.h> /* for GHashTable, GSList */
 
 /* Type definitions */
 
@@ -60,19 +61,22 @@ typedef enum
  */
 typedef enum
 {
-  OSP_SCAN_STATUS_ERROR = -1, /**< Error status. */
-  OSP_SCAN_STATUS_INIT,       /**< Init status. */
-  OSP_SCAN_STATUS_RUNNING,    /**< Running status. */
-  OSP_SCAN_STATUS_STOPPED,    /**< Stopped status. */
-  OSP_SCAN_STATUS_FINISHED,   /**< Finished status. */
+  OSP_SCAN_STATUS_ERROR = -1,  /**< Error status. */
+  OSP_SCAN_STATUS_INIT,        /**< Init status. */
+  OSP_SCAN_STATUS_RUNNING,     /**< Running status. */
+  OSP_SCAN_STATUS_STOPPED,     /**< Stopped status. */
+  OSP_SCAN_STATUS_FINISHED,    /**< Finished status. */
+  OSP_SCAN_STATUS_QUEUED,      /**< Queued status */
+  OSP_SCAN_STATUS_INTERRUPTED, /**< Interrupted status */
 } osp_scan_status_t;
 
-
-typedef struct {
+typedef struct
+{
   const char *scan_id; ///< UUID of the scan which get the status from.
 } osp_get_scan_status_opts_t;
 
-typedef struct {
+typedef struct
+{
   int start;    /**< Start interval. */
   int end;      /**< End interval. */
   char *titles; /**< Graph title. */
@@ -95,14 +99,21 @@ osp_get_version (osp_connection_t *, char **, char **, char **, char **,
                  char **, char **);
 
 int
-osp_get_vts_version (osp_connection_t *, char **);
+osp_get_vts_version (osp_connection_t *, char **, char **error);
 
 int
 osp_get_vts (osp_connection_t *, entity_t *);
 
-typedef struct {
-  char *filter; ///< the filter to apply for a vt sub-selection.
+typedef struct
+{
+  char *filter;     ///< the filter to apply for a vt sub-selection.
+  int version_only; ///< if get only feed info or the vt collection
 } osp_get_vts_opts_t;
+
+/**
+ * @brief Sensible default values for osp_get_vts_opts_t
+ */
+static const osp_get_vts_opts_t osp_get_vts_opts_default = {NULL, 0};
 
 int
 osp_get_vts_ext (osp_connection_t *, osp_get_vts_opts_t, entity_t *);
@@ -111,13 +122,13 @@ int
 osp_start_scan (osp_connection_t *, const char *, const char *, GHashTable *,
                 const char *, char **);
 
-typedef struct {
-  GSList *targets;              ///< Target hosts to scan.
-  GSList *vt_groups;            ///< VT groups to use for the scan.
-  GSList *vts;                  ///< Single VTs to use for the scan.
-  GHashTable *scanner_params;   ///< Table of scanner parameters.
-  int parallel;                 ///< Number of parallel scans.
-  const char *scan_id;          ///< UUID to set for scan, null otherwise.
+typedef struct
+{
+  GSList *targets;            ///< Target hosts to scan.
+  GSList *vt_groups;          ///< VT groups to use for the scan.
+  GSList *vts;                ///< Single VTs to use for the scan.
+  GHashTable *scanner_params; ///< Table of scanner parameters.
+  const char *scan_id;        ///< UUID to set for scan, null otherwise.
 } osp_start_scan_opts_t;
 
 int
@@ -127,16 +138,10 @@ int
 osp_get_scan (osp_connection_t *, const char *, char **, int, char **);
 
 int
-osp_get_scan_pop (osp_connection_t *,
-                  const char *,
-                  char **,
-                  int,
-                  int,
-                  char **);
+osp_get_scan_pop (osp_connection_t *, const char *, char **, int, int, char **);
 
 osp_scan_status_t
-osp_get_scan_status_ext (osp_connection_t *,
-                         osp_get_scan_status_opts_t,
+osp_get_scan_status_ext (osp_connection_t *, osp_get_scan_status_opts_t,
                          char **);
 
 int
@@ -148,12 +153,9 @@ osp_stop_scan (osp_connection_t *, const char *, char **);
 int
 osp_get_scanner_details (osp_connection_t *, char **, GSList **);
 
-
 int
-osp_get_performance_ext (osp_connection_t *,
-                         osp_get_performance_opts_t,
-                         char **,
-                         char **);
+osp_get_performance_ext (osp_connection_t *, osp_get_performance_opts_t,
+                         char **, char **);
 
 /* OSP scanner parameters handling */
 
@@ -189,17 +191,16 @@ osp_credential_new (const char *, const char *, const char *);
 void
 osp_credential_free (osp_credential_t *);
 
-const gchar*
-osp_credential_get_auth_data (osp_credential_t *, const char*);
+const gchar *
+osp_credential_get_auth_data (osp_credential_t *, const char *);
 
 void
-osp_credential_set_auth_data (osp_credential_t *, const char*, const char*);
-
+osp_credential_set_auth_data (osp_credential_t *, const char *, const char *);
 
 /* OSP targets handling */
 
 osp_target_t *
-osp_target_new (const char *, const char *, const char *);
+osp_target_new (const char *, const char *, const char *, int, int, int);
 
 void
 osp_target_set_finished_hosts (osp_target_t *, const char *);
@@ -227,6 +228,6 @@ void
 osp_vt_single_free (osp_vt_single_t *);
 
 void
-osp_vt_single_add_value (osp_vt_single_t *, const char*, const char*);
+osp_vt_single_add_value (osp_vt_single_t *, const char *, const char *);
 
 #endif

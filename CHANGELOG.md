@@ -4,6 +4,66 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [20.8.1] (2021-02-01)
+
+### Added
+- Add function to get duplicated hosts from the hosts list. [#387](https://github.com/greenbone/gvm-libs/pull/387)
+- Add file access tests using effective UID/GID [#422](https://github.com/greenbone/gvm-libs/pull/422)
+
+### Changed
+- Reduce ping timeout when using test_alive_hosts_only feature. [#400](https://github.com/greenbone/gvm-libs/pull/400)
+- Retry if response via tls1.3 is still not received. [#404](https://github.com/greenbone/gvm-libs/pull/404)
+
+### Fixed
+- Fix port list for tcp pings when using test_alive_hosts_only feature. [#392](https://github.com/greenbone/gvm-libs/pull/392)
+- Set source address correctly and do not try to send ARP to unreachable destination. [#401](https://github.com/greenbone/gvm-libs/pull/401)
+- Increase minimum gpgme version [#405](https://github.com/greenbone/gvm-libs/pull/405)
+- Always NULL check ifaddrs->ifa_addr [#416](https://github.com/greenbone/gvm-libs/pull/416)
+- Correct g_hash_table_remove arg [#419](https://github.com/greenbone/gvm-libs/pull/419)
+- Accept underscore as valid char in hostname strings [#430](https://github.com/greenbone/gvm-libs/pull/430)
+- Add throttle for pinging with test_alive_hosts_only feature when socket buffer is full. [#429](https://github.com/greenbone/gvm-libs/pull/429)
+
+[20.8.1]: https://github.com/greenbone/gvm-libs/compare/v20.8.0...v20.8.1
+
+## [20.8.0] (2020-08-12)
+
+### Added
+- Add nvti_get_tag() [#285](https://github.com/greenbone/gvm-libs/pull/285)
+- Add nvti_solution_method() and nvti_set_solution_method() [#283](https://github.com/greenbone/gvm-libs/pull/283)
+- Extend osp with target's alive test option.[#312](https://github.com/greenbone/gvm-libs/pull/312)
+- Extend osp with target's reverse_lookup_* options.[#314](https://github.com/greenbone/gvm-libs/pull/314)
+- Add unit tests for osp. [#315](https://github.com/greenbone/gvm-libs/pull/315)
+- Add support for test_alive_hosts_only feature of openvas. [#320](https://github.com/greenbone/gvm-libs/pull/320)
+- Add function to set and get the NVT QoD. [#321](https://github.com/greenbone/gvm-libs/pull/321)
+- Add unit tests for networking.c port list functions. [#325](https://github.com/greenbone/gvm-libs/pull/325)
+- Add gmp_start_task_ext_c. [#327](https://github.com/greenbone/gvm-libs/pull/327)
+- Make log mutex visible. [#328](https://github.com/greenbone/gvm-libs/pull/328)
+- Add new scan status QUEUED.
+  [#336](https://github.com/greenbone/gvm-libs/pull/336)
+  [#340](https://github.com/greenbone/gvm-libs/pull/340)
+- Add gvm_routethrough which is used by Boreas alive detection module. [#339](https://github.com/greenbone/gvm-libs/pull/339)
+- Move alive detection module Boreas into gvm-libs. [#346](https://github.com/greenbone/gvm-libs/pull/346)
+- Add new scan status INTERRUPTED. [#356](https://github.com/greenbone/gvm-libs/pull/356)
+- Add sensible default values for osp_get_vts_opts_t. [#360](https://github.com/greenbone/gvm-libs/pull/360)
+- Add cli support for boreas standalone tool. [#359](https://github.com/greenbone/gvm-libs/pull/359)
+
+### Changed
+- Improve validation in is_hostname [#353](https://github.com/greenbone/gvm-libs/pull/353)
+- Use get_vts instead of get_version to get the feed version is osp_get_vts_version(). [#357](https://github.com/greenbone/gvm-libs/pull/357)
+- Allow all alive test combination for boreas. [#370](https://github.com/greenbone/gvm-libs/pull/370)
+
+### Fixed
+- Fix is_cidr_block(). [#322](https://github.com/greenbone/gvm-libs/pull/322)
+- Fix is_cidr6_block() and is_short_range_network(). [#337](https://github.com/greenbone/gvm-libs/pull/337)
+- Fix S/MIME keylist and improve error handling [#345](https://github.com/greenbone/gvm-libs/pull/345)
+- Fix interrupted state by sending correct number of dead hosts. [#371](https://github.com/greenbone/gvm-libs/pull/371)
+
+### Removed
+- Remove parallel from target options [#347](https://github.com/greenbone/gvm-libs/pull/347)
+- Remove zero padding from version [#377](https://github.com/greenbone/gvm-libs/pull/377)
+
+[20.8.0]: https://github.com/greenbone/gvm-libs/compare/v11.0.0...v20.8.0
+
 ## [11.0.1] (2020-05-12)
 
 ### Added
@@ -21,7 +81,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Fix trust and file handling for S/MIME [#309](https://github.com/greenbone/gvm-libs/pull/309)
 - Get details with get_reports in gmp_get_report_ext [#313](https://github.com/greenbone/gvm-libs/pull/313)
 - Fix escaping entity attributes in print_entity_to_string [#318](https://github.com/greenbone/gvm-libs/pull/318)
-- Fix is_cidr_block() [#323][https://github.com/greenbone/gvm-libs/pull/323]
+- Fix is_cidr_block() [#323](https://github.com/greenbone/gvm-libs/pull/323)
+- Fix is_cidr6_block() and is_short_range_network(). [#338](https://github.com/greenbone/gvm-libs/pull/338)
 
 [11.0.1]: https://github.com/greenbone/gvm-libs/compare/v11.0.0...v11.0.1
 
@@ -51,11 +112,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Make solution and solution_type explicit for nvti. [#255](https://github.com/greenbone/gvm-libs/pull/255)
 - Internalize struct nvtpref_t. [#260](https://github.com/greenbone/gvm-libs/pull/260)
 - Extend redis connection error msg with actual path. [#264](https://github.com/greenbone/gvm-libs/pull/264)
+- Disable testhosts test as it's not really a test. [#287](https://github.com/greenbone/gvm-libs/pull/287)
+- Don't create an entity tree during read_string_c. [#305](https://github.com/greenbone/gvm-libs/pull/305)
 
 ### Fixed
 - Prevent g_strsplit to be called with NULL. [#238](https://github.com/greenbone/gvm-libs/pull/238)
 - Check filter before using it in osp_get_vts_ext. [#266](https://github.com/greenbone/gvm-libs/pull/266)
-- Fix is_cidr_block(). [#323](https://github.com/greenbone/gvm-libs/pull/323)
 
 ### Removed
 - Remove inconsistent delays in kb routines. [#230](https://github.com/greenbone/gvm-libs/pull/230)

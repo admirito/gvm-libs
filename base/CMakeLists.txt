@@ -1,4 +1,4 @@
-# Copyright (C) 2009-2019 Greenbone Networks GmbH
+# Copyright (C) 2009-2021 Greenbone Networks GmbH
 #
 # SPDX-License-Identifier: GPL-2.0-or-later
 #
@@ -83,6 +83,16 @@ if (BUILD_TESTS)
 
   target_link_libraries (array-test ${CGREEN_LIBRARIES} ${GLIB_LDFLAGS} ${LINKER_HARDENING_FLAGS})
 
+  add_executable (networking-test
+                  EXCLUDE_FROM_ALL
+                  networking_tests.c)
+  add_test (networking-test networking-test)
+  set (NETWORKING_TEST_LINKER_WRAP_OPTIONS
+      "-Wl,-wrap,g_io_channel_new_file,-wrap,g_io_channel_shutdown")
+  target_include_directories (networking-test PRIVATE ${CGREEN_INCLUDE_DIRS} )
+  target_link_libraries (networking-test gvm_base_shared ${CGREEN_LIBRARIES} ${GLIB_LDFLAGS} ${LINKER_HARDENING_FLAGS}
+                       ${NETWORKING_TEST_LINKER_WRAP_OPTIONS})
+
   add_executable (version-test
                   EXCLUDE_FROM_ALL
                   version_tests.c)
@@ -91,7 +101,31 @@ if (BUILD_TESTS)
 
   target_include_directories (version-test PRIVATE ${CGREEN_INCLUDE_DIRS})
 
-  target_link_libraries (version-test ${CGREEN_LIBRARIES} ${GLIB_LDFLAGS} ${LINKER_HARDENING_FLAGS})
+  target_link_libraries (version-test ${CGREEN_LIBRARIES}
+    ${GLIB_LDFLAGS} ${LINKER_HARDENING_FLAGS})
+
+  add_executable (nvti-test
+                  EXCLUDE_FROM_ALL
+                  nvti_tests.c)
+
+  add_test (nvti-test nvti-test)
+
+  target_include_directories (nvti-test PRIVATE ${CGREEN_INCLUDE_DIRS})
+
+  target_link_libraries (nvti-test ${CGREEN_LIBRARIES}
+    ${GLIB_LDFLAGS} ${LINKER_HARDENING_FLAGS})
+
+  add_executable (hosts-test
+                  EXCLUDE_FROM_ALL
+                  hosts_tests.c)
+
+  add_test (hosts-test hosts-test)
+
+  target_include_directories (hosts-test PRIVATE ${CGREEN_INCLUDE_DIRS})
+
+  target_link_libraries (hosts-test  gvm_base_shared gvm_util_shared
+    ${CGREEN_LIBRARIES} ${GLIB_LDFLAGS} ${LINKER_HARDENING_FLAGS})
+
 endif (BUILD_TESTS)
 
 

@@ -1,4 +1,4 @@
-/* Copyright (C) 2013-2019 Greenbone Networks GmbH
+/* Copyright (C) 2013-2021 Greenbone Networks GmbH
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
@@ -339,11 +339,14 @@ is_short_range_network (const char *str)
 
   p = NULL;
   end = strtol (end_str, &p, 10);
-  g_free (ip_str);
 
   if (*p || end < 0 || end > 255)
-    return 0;
+    {
+      g_free (ip_str);
+      return 0;
+    }
 
+  g_free (ip_str);
   return 1;
 }
 
@@ -397,26 +400,72 @@ short_range_network_ips (const char *str, struct in_addr *first,
 
 /**
  * @brief Checks if a buffer points to a valid hostname.
- * Valid characters include: Alphanumerics, dot (.), dash (-) and underscore (_)
- * up to 255 characters.
  *
- * @param[in]   str Buffer to check in.
+ * @param[in]  str  String to check.
  *
  * @return 1 if valid hostname, 0 otherwise.
  */
 static int
 is_hostname (const char *str)
 {
-  const char *h = str;
+  gchar *copy, **point, **split;
 
-  while (*h && (isalnum (*h) || strchr ("-_.", *h)))
-    h++;
+  /* From
+   * https://stackoverflow.com/questions/2532053/validate-a-hostname-string. */
 
-  /* Valid string if no other chars, and length is 255 at most. */
-  if (*h == '\0' && h - str < 256)
-    return 1;
+  /* Remove one dot from the end. */
 
-  return 0;
+  copy = g_strdup (str);
+  if (copy[strlen (copy) - 1] == '.')
+    copy[strlen (copy) - 1] = '\0';
+
+  /* Check length. */
+
+  if (strlen (copy) == 0 || strlen (copy) > 253)
+    {
+      g_free (copy);
+      return 0;
+    }
+
+  /* Split on dots. */
+
+  point = split = g_strsplit (copy, ".", 0);
+  g_free (copy);
+
+  /* Last part (TLD) may not be an integer. */
+
+  if (*point)
+    {
+      gchar *last;
+
+      while (*(point + 1))
+        point++;
+      last = *point;
+      if (strlen (last))
+        {
+          while (*last && isdigit (*last))
+            last++;
+          if (*last == '\0')
+            return 0;
+        }
+    }
+
+  /* Check each part. */
+
+  point = split;
+  while (*point)
+    if (g_regex_match_simple ("^(?!-)[a-z0-9_-]{1,63}(?<!-)$", *point,
+                              G_REGEX_CASELESS, 0)
+        == 0)
+      {
+        g_strfreev (split);
+        return 0;
+      }
+    else
+      point++;
+
+  g_strfreev (split);
+  return 1;
 }
 
 /**
@@ -453,11 +502,14 @@ is_cidr6_block (const char *str)
 
   p = NULL;
   block = strtol (block_str, &p, 10);
-  g_free (addr6_str);
 
   if (*p || block <= 0 || block > 128)
-    return 0;
+    {
+      g_free (addr6_str);
+      return 0;
+    }
 
+  g_free (addr6_str);
   return 1;
 }
 
@@ -897,7 +949,7 @@ gvm_host_free (gpointer host)
  * @param[in] hosts Hosts in which to insert the host.
  * @param[in] host  Host to insert.
  */
-static void
+void
 gvm_hosts_add (gvm_hosts_t *hosts, gvm_host_t *host)
 {
   if (hosts->count == hosts->max_size)
@@ -1014,7 +1066,7 @@ gvm_hosts_deduplicate (gvm_hosts_t *hosts)
     gvm_hosts_fill_gaps (hosts);
   g_hash_table_destroy (name_table);
   hosts->count -= duplicates;
-  hosts->removed += duplicates;
+  hosts->duplicated += duplicates;
   hosts->current = 0;
   malloc_trim (0);
 }
@@ -1539,6 +1591,58 @@ gvm_hosts_exclude (gvm_hosts_t *hosts, const char *excluded_str)
 }
 
 /**
+ * @brief Creates a new gvm_host_t from a host string.
+ *
+ * @param[in] host_str The host string can consist of a hostname, IPv4 address
+ * or IPv6 address.
+ *
+ * @return NULL if error. Otherwise, a single host structure that should be put
+ * into a gvm_hosts_t structure for freeing with @ref gvm_hosts_free or
+ * freed directly via @ref gvm_host_free.
+ */
+gvm_host_t *
+gvm_host_from_str (const gchar *host_str)
+{
+  int host_type;
+
+  if (host_str == NULL)
+    return NULL;
+
+  /* IPv4, hostname, IPv6 */
+  /* -1 if error. */
+  host_type = gvm_get_host_type (host_str);
+
+  switch (host_type)
+    {
+    case HOST_TYPE_NAME:
+    case HOST_TYPE_IPV4:
+    case HOST_TYPE_IPV6:
+      {
+        /* New host. */
+        gvm_host_t *host = gvm_host_new ();
+        host->type = host_type;
+        if (host_type == HOST_TYPE_NAME)
+          host->name = g_ascii_strdown (host_str, -1);
+        else if (host_type == HOST_TYPE_IPV4)
+          {
+            if (inet_pton (AF_INET, host_str, &host->addr) != 1)
+              break;
+          }
+        else if (host_type == HOST_TYPE_IPV6)
+          {
+            if (inet_pton (AF_INET6, host_str, &host->addr6) != 1)
+              break;
+          }
+        return host;
+      }
+    case -1:
+    default:
+      return NULL;
+    }
+  return NULL;
+}
+
+/**
  * @brief Checks for a host object reverse dns lookup existence.
  *
  * @param[in] host The host to reverse-lookup.
@@ -1778,6 +1882,20 @@ unsigned int
 gvm_hosts_removed (const gvm_hosts_t *hosts)
 {
   return hosts ? hosts->removed : 0;
+}
+
+/**
+ * @brief Gets the count of single values in hosts string that were duplicated
+ * and therefore removed from the list
+ *
+ * @param[in] hosts The hosts collection.
+ *
+ * @return The number of duplicated values.
+ */
+unsigned int
+gvm_hosts_duplicated (const gvm_hosts_t *hosts)
+{
+  return hosts ? hosts->duplicated : 0;
 }
 
 /**

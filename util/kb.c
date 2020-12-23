@@ -1,4 +1,4 @@
-/* Copyright (C) 2014-2019 Greenbone Networks GmbH
+/* Copyright (C) 2014-2021 Greenbone Networks GmbH
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
@@ -815,8 +815,7 @@ redis_pop_str (kb_t kb, const char *name)
  * @param[in] kb  KB handle where to fetch the item.
  * @param[in] name  Name of the element to retrieve.
  *
- * @return A struct kb_item to be freed with kb_item_free() or NULL if no
- *         element was found or on error.
+ * @return An integer.
  */
 static int
 redis_get_int (kb_t kb, const char *name)
@@ -1366,9 +1365,9 @@ redis_add_nvt (kb_t kb, const nvti_t *nvt, const char *filename)
     nvti_oid (nvt), filename, nvti_required_keys (nvt) ?: "",
     nvti_mandatory_keys (nvt) ?: "", nvti_excluded_keys (nvt) ?: "",
     nvti_required_udp_ports (nvt) ?: "", nvti_required_ports (nvt) ?: "",
-    nvti_dependencies (nvt) ?: "", nvti_tag (nvt) ?: "", cves ?: "",
-    bids ?: "", xrefs ?: "", nvti_category (nvt),
-    nvti_timeout (nvt), nvti_family (nvt), nvti_name (nvt));
+    nvti_dependencies (nvt) ?: "", nvti_tag (nvt) ?: "", cves ?: "", bids ?: "",
+    xrefs ?: "", nvti_category (nvt), nvti_timeout (nvt), nvti_family (nvt),
+    nvti_name (nvt));
   g_free (cves);
   g_free (bids);
   g_free (xrefs);

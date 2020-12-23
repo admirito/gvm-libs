@@ -1,4 +1,4 @@
-/* Copyright (C) 2017-2019 Greenbone Networks GmbH
+/* Copyright (C) 2017-2021 Greenbone Networks GmbH
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
@@ -46,5 +46,11 @@ log_func_for_gnutls (int, const char *);
 
 void
 setup_log_handlers (GSList *);
+
+void
+gvm_log_lock (void);
+
+void
+gvm_log_unlock (void);
 
 #endif /* not _GVM_LOGGING_H */

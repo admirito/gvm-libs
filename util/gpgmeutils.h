@@ -1,4 +1,4 @@
-/* Copyright (C) 2013-2019 Greenbone Networks GmbH
+/* Copyright (C) 2013-2021 Greenbone Networks GmbH
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
@@ -37,10 +37,8 @@ gpgme_ctx_t
 gvm_init_gpgme_ctx_from_dir (const gchar *);
 
 int
-gvm_gpg_import_many_types_from_string (gpgme_ctx_t,
-                                       const char *,
-                                       ssize_t,
-                                       GArray*);
+gvm_gpg_import_many_types_from_string (gpgme_ctx_t, const char *, ssize_t,
+                                       GArray *);
 
 int
 gvm_gpg_import_from_string (gpgme_ctx_t, const char *, ssize_t,

@@ -1,4 +1,4 @@
-/* Copyright (C) 2009-2019 Greenbone Networks GmbH
+/* Copyright (C) 2009-2021 Greenbone Networks GmbH
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
@@ -59,7 +59,7 @@ pidfile_create (gchar *daemon_name)
 
   if (pidfile == NULL)
     {
-      g_critical ("%s: failed to open pidfile: %s\n", __FUNCTION__,
+      g_critical ("%s: failed to open pidfile: %s\n", __func__,
                   strerror (errno));
       return 1;
     }

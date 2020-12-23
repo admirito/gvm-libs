@@ -1,4 +1,4 @@
-/* Copyright (C) 2015-2019 Greenbone Networks GmbH
+/* Copyright (C) 2015-2021 Greenbone Networks GmbH
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
@@ -80,8 +80,8 @@ radius_init (const char *hostname, const char *secret)
 
   if (config_fd == -1)
     {
-      g_warning ("%s: Couldn't create temp radius config file: %s\n",
-                 __FUNCTION__, strerror (errno));
+      g_warning ("%s: Couldn't create temp radius config file: %s\n", __func__,
+                 strerror (errno));
       goto radius_init_fail;
     }
 
@@ -89,8 +89,8 @@ radius_init (const char *hostname, const char *secret)
   if (config_file == NULL)
     {
       close (config_fd);
-      g_warning ("%s: Couldn't open temp radius config file %s: %s\n",
-                 __FUNCTION__, config_filename, strerror (errno));
+      g_warning ("%s: Couldn't open temp radius config file %s: %s\n", __func__,
+                 config_filename, strerror (errno));
       goto radius_init_fail;
     }
 
@@ -109,7 +109,7 @@ radius_init (const char *hostname, const char *secret)
     {
       fclose (config_file);
       g_warning ("%s: Couldn't write to temp radius config file %s:%s\n",
-                 __FUNCTION__, config_filename, strerror (errno));
+                 __func__, config_filename, strerror (errno));
       unlink (config_filename);
       goto radius_init_fail;
     }
@@ -118,7 +118,7 @@ radius_init (const char *hostname, const char *secret)
   rh = rc_read_config (config_filename);
   if (rh == NULL)
     {
-      g_warning ("%s: Couldn't read temp radius config file %s\n", __FUNCTION__,
+      g_warning ("%s: Couldn't read temp radius config file %s\n", __func__,
                  config_filename);
       unlink (config_filename);
       goto radius_init_fail;

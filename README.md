@@ -3,8 +3,8 @@
 # gvm-libs
 
 [![GitHub releases](https://img.shields.io/github/release/greenbone/gvm-libs.svg)](https://github.com/greenbone/gvm-libs/releases)
-[![Code Documentation Coverage](https://img.shields.io/codecov/c/github/greenbone/gvm-libs/gvm-libs-11.0.svg?label=Doc%20Coverage&logo=codecov)](https://codecov.io/gh/greenbone/gvm-libs)
-[![CircleCI](https://circleci.com/gh/greenbone/gvm-libs/tree/gvm-libs-11.0.svg?style=svg)](https://circleci.com/gh/greenbone/gvm-libs/tree/gvm-libs-11.0)
+[![Code Documentation Coverage](https://img.shields.io/codecov/c/github/greenbone/gvm-libs.svg?label=Doc%20Coverage&logo=codecov)](https://codecov.io/gh/greenbone/gvm-libs)
+[![CircleCI](https://circleci.com/gh/greenbone/gvm-libs/tree/master.svg?style=svg)](https://circleci.com/gh/greenbone/gvm-libs/tree/master)
 
 This is the libraries module for the Greenbone Vulnerability Management Solution.
 
@@ -29,9 +29,9 @@ For detailed installation requirements and instructions, please see the file
 [INSTALL.md](INSTALL.md).
 
 If you are not familiar or comfortable building from source code, we recommend
-that you use the Greenbone Community Edition, a prepared virtual machine with a
-readily available setup. Information regarding the virtual machine is available
-at <https://www.greenbone.net/en/community-edition/>.
+that you use the Greenbone Security Manager TRIAL (GSM TRIAL), a prepared virtual
+machine with a readily available setup. Information regarding the virtual machine
+is available at <https://www.greenbone.net/en/testnow>.
 
 ## Usage
 

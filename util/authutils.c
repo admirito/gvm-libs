@@ -1,4 +1,4 @@
-/* Copyright (C) 2009-2019 Greenbone Networks GmbH
+/* Copyright (C) 2009-2021 Greenbone Networks GmbH
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
@@ -123,7 +123,7 @@ gvm_auth_init ()
    * test. */
   if (!gcry_check_version (NULL))
     {
-      g_critical ("%s: libgcrypt version check failed\n", __FUNCTION__);
+      g_critical ("%s: libgcrypt version check failed\n", __func__);
       return -1;
     }
 

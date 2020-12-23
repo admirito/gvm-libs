@@ -1,4 +1,4 @@
-# Copyright (C) 2011-2019 Greenbone Networks GmbH
+# Copyright (C) 2011-2021 Greenbone Networks GmbH
 #
 # SPDX-License-Identifier: GPL-2.0-or-later
 #
@@ -21,7 +21,7 @@ cmake_minimum_required(VERSION 3.0)
 message ("-- Configuring the Greenbone Vulnerability Management Libraries...")
 
 project (gvm-libs
-  VERSION 11.0.1
+  VERSION 20.8.1
   LANGUAGES C)
 
 if (POLICY CMP0005)
@@ -51,8 +51,9 @@ find_program (CLANG_FORMAT clang-format)
 
 if (CLANG_FORMAT)
   message (STATUS "Looking for clang-format... ${CLANG_FORMAT}")
-  add_custom_target(format COMMAND ${CLANG_FORMAT} "-i" "./base/*.c" "./gmp/*.c"
-                    "./osp/*.c" "./util/*.c" "./base/*.h" "./gmp/*.h" "./osp/*.h"
+  add_custom_target(format COMMAND ${CLANG_FORMAT} "-i" "./base/*.c" 
+                    "./boreas/*.c" "./gmp/*.c" "./osp/*.c" "./util/*.c" 
+                    "./base/*.h" "./boreas/*.h" "./gmp/*.h" "./osp/*.h"
                     "./util/*.h" WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
 else (CLANG_FORMAT)
   message (STATUS "clang-format not found...")
@@ -83,25 +84,14 @@ if (NOT CMAKE_BUILD_TYPE MATCHES "Release")
   endif (EXISTS "${CMAKE_SOURCE_DIR}/.git/")
 endif (NOT CMAKE_BUILD_TYPE MATCHES "Release")
 
-# Set beta version if this is a beta release series,
-# unset if this is a stable release series.
-set (PROJECT_BETA_RELEASE 0)
-
-if (GIT_REVISION)
-  set (PROJECT_VERSION_GIT "${GIT_REVISION}")
-endif (GIT_REVISION)
-
-# If PROJECT_BETA_RELEASE is set, the version string will be set to:
-#   "major.minor+beta${PROJECT_BETA_RELEASE}"
-# If PROJECT_BETA_RELEASE is NOT set, the version string will be set to:
-#   "major.minor.patch"
-if (PROJECT_BETA_RELEASE)
-  set (PROJECT_VERSION_SUFFIX "+beta${PROJECT_BETA_RELEASE}")
-else (PROJECT_BETA_RELEASE)
+# If a patch version is not defined, assume a pre-release
+if (DEFINED PROJECT_VERSION_PATCH AND NOT PROJECT_VERSION_PATCH STREQUAL "")
   set (PROJECT_VERSION_SUFFIX ".${PROJECT_VERSION_PATCH}")
-endif (PROJECT_BETA_RELEASE)
+else (DEFINED PROJECT_VERSION_PATCH AND NOT PROJECT_VERSION_PATCH STREQUAL "")
+  set (PROJECT_VERSION_SUFFIX "+beta1")
+endif (DEFINED PROJECT_VERSION_PATCH AND NOT PROJECT_VERSION_PATCH STREQUAL "")
 
-set (PROJECT_VERSION_STRING "${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}${PROJECT_VERSION_SUFFIX}")
+set (PROJECT_VERSION_STRING "${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}${PROJECT_VERSION_SUFFIX}${GIT_REVISION}")
 
 ## CPack configuration
 
@@ -223,12 +213,15 @@ configure_file (VERSION.in ${CMAKE_BINARY_DIR}/VERSION @ONLY)
 ## Testing
 
 if (BUILD_TESTS AND NOT SKIP_SRC)
+  message ("-- Tests enabled.")
   enable_testing ()
 
   find_package (cgreen REQUIRED)
 
   add_custom_target (tests
-                    DEPENDS array-test xmlutils-test version-test)
+    DEPENDS array-test alivedetection-test boreas_error-test boreas_io-test
+            cli-test ping-test sniffer-test util-test networking-test
+            xmlutils-test version-test osp-test nvti-test hosts-test)
 
 endif (BUILD_TESTS AND NOT SKIP_SRC)
 
@@ -236,6 +229,7 @@ endif (BUILD_TESTS AND NOT SKIP_SRC)
 
 if (NOT SKIP_SRC)
   add_subdirectory (base)
+  add_subdirectory (boreas)
   add_subdirectory (util)
   add_subdirectory (osp)
   add_subdirectory (gmp)

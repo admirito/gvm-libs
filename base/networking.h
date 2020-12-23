@@ -1,4 +1,4 @@
-/* Copyright (C) 2013-2019 Greenbone Networks GmbH
+/* Copyright (C) 2013-2021 Greenbone Networks GmbH
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
@@ -49,7 +49,7 @@ struct range
 {
   gchar *comment;       /**< Comment. */
   gchar *id;            /**< UUID. */
-  int end;              /**< End port.  0 for single port. */
+  int end;              /**< End port. For single port end == start. */
   int exclude;          /**< Whether to exclude range. */
   int start;            /**< Start port. */
   port_protocol_t type; /**< Port protocol. */
@@ -112,5 +112,8 @@ port_in_port_ranges (int, port_protocol_t, array_t *);
 
 int
 ipv6_is_enabled ();
+
+gchar *
+gvm_routethrough (struct sockaddr_storage *, struct sockaddr_storage *);
 
 #endif /* not _GVM_NETWORKING_H */
