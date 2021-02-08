@@ -1,3 +1,9 @@
+gvm-libs (20.8.1-1) focal; urgency=medium
+
+  * Import upstream from branch gvm-libs-20.08
+
+ -- Mohammad Razavi <mrazavi64@gmail.com>  Wed, 23 Dec 2020 12:36:41 +0330
+
 gvm-libs (11.0.1-2) focal; urgency=medium
 
   * Import upstream version 11.0.1
