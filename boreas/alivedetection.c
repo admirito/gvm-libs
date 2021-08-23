@@ -52,7 +52,7 @@
 /**
  * @brief GLib log domain.
  */
-#define G_LOG_DOMAIN "alive scan"
+#define G_LOG_DOMAIN "libgvm boreas"
 
 struct scanner scanner;
 
@@ -77,6 +77,10 @@ scan (alive_test_t alive_test)
   struct timeval start_time, end_time;
   int scandb_id;
   gchar *scan_id;
+  /* Following variables are only relevant if only ICMP was chosen. */
+  int remaining_batch = 0;
+  int prev_alive = 0;
+  gboolean limit_reached_handled = FALSE; /* Scan restrictions related. */
 
   gettimeofday (&start_time, NULL);
   number_of_targets = g_hash_table_size (scanner.hosts_data->targethosts);
@@ -86,10 +90,90 @@ scan (alive_test_t alive_test)
   g_message ("Alive scan %s started: Target has %d hosts", scan_id,
              number_of_targets);
 
-  sniffer_thread_id = 0;
-  start_sniffer_thread (&scanner, &sniffer_thread_id);
+  /* Sniffer thread needed if any alive test besides ALIVE_TEST_CONSIDER_ALIVE
+   * was chosen. */
+  if (alive_test != ALIVE_TEST_CONSIDER_ALIVE)
+    {
+      sniffer_thread_id = 0;
+      start_sniffer_thread (&scanner, &sniffer_thread_id);
+    }
 
-  if (alive_test & ALIVE_TEST_ICMP)
+  /* Continuously send dead hosts to ospd if only ICMP was chosen instead of
+   * sending all at once at the end. This is done for displaying a progressbar
+   * that increases gradually. */
+  if (alive_test == ALIVE_TEST_ICMP)
+    {
+      g_hash_table_iter_init (&target_hosts_iter,
+                              scanner.hosts_data->targethosts);
+      int batch = 1000;
+      int curr_alive = 0;
+      prev_alive = 0;
+      /* Number of hosts in last batch. Depending on the total number of hosts
+       * the last batch size maybe be double the normal size. Info about the
+       * last batch is send after all hosts were checked and we waited for last
+       * packets to arrive.*/
+      remaining_batch = number_of_targets;
+      for (int packets_send = 0;
+           g_hash_table_iter_next (&target_hosts_iter, &key, &value);)
+        {
+          send_icmp (key, value, &scanner);
+          packets_send++;
+          /* Send dead hosts update after batch number of packets were send and
+           * we still have more than batch size packets remaining. */
+          if (packets_send % batch == 0
+              && (number_of_targets - packets_send) > batch)
+            {
+              /* The number of dead hosts we have to send to ospd is the batch
+               * size minus the newly found alive hosts. The newly found alive
+               * hosts is the diff between the current total of alive hosts and
+               * the total of the last batch. */
+              curr_alive = g_hash_table_size (scanner.hosts_data->alivehosts);
+              number_of_dead_hosts = batch - (curr_alive - prev_alive);
+
+              /* If the max_scan_hosts limit was reached we can not tell ospd
+               * the true number of dead hosts. The number of alive hosts which
+               * are above the max_scan_hosts limit are not to be subtracted
+               * form the dead hosts to send. They are considered as dead hosts
+               * for the progress bar.*/
+              if (scanner.scan_restrictions->max_scan_hosts_reached)
+                {
+                  /* Handle the case where we reach the max_scan_hosts for the
+                   * first time. We may have to consider some of the new alive
+                   * hosts as dead because of the restriction. E.g
+                   * curr_alive=110 prev_alive=90 max_scan_hosts=100 batch=100.
+                   * Normally we would send 80 as dead in this batch (20 new
+                   * alive hosts) but because of the restriction we send 90 as
+                   * dead. The 10 hosts which are over the limit are considered
+                   * as dead.
+                   * After this limit case was handled we just always send the
+                   * complete batch as dead hosts.*/
+                  if (!limit_reached_handled)
+                    {
+                      /* Number of alive hosts until limit was reached. */
+                      int last_hosts_considered_as_alive =
+                        scanner.scan_restrictions->max_scan_hosts - prev_alive;
+                      number_of_dead_hosts =
+                        batch - last_hosts_considered_as_alive;
+                      send_dead_hosts_to_ospd_openvas (number_of_dead_hosts);
+                      remaining_batch -= batch;
+                      limit_reached_handled = TRUE;
+                    }
+                  else
+                    {
+                      send_dead_hosts_to_ospd_openvas (batch);
+                      remaining_batch -= batch;
+                    }
+                }
+              else
+                {
+                  send_dead_hosts_to_ospd_openvas (number_of_dead_hosts);
+                  remaining_batch -= batch;
+                }
+              prev_alive = curr_alive;
+            }
+        }
+    }
+  else if (alive_test & ALIVE_TEST_ICMP)
     {
       g_debug ("%s: ICMP Ping", __func__);
       g_hash_table_foreach (scanner.hosts_data->targethosts, send_icmp,
@@ -138,38 +222,76 @@ scan (alive_test_t alive_test)
         }
     }
 
-  g_debug (
-    "%s: all ping packets have been sent, wait a bit for rest of replies.",
-    __func__);
-
-  /* If all targets are already identified as alive we do not need to wait for
-   * replies anymore.*/
-  if (number_of_targets
-      != (int) g_hash_table_size (scanner.hosts_data->alivehosts))
-    sleep (WAIT_FOR_REPLIES_TIMEOUT);
-
-  stop_sniffer_thread (&scanner, sniffer_thread_id);
-
-  number_of_dead_hosts = count_difference (scanner.hosts_data->targethosts,
-                                           scanner.hosts_data->alivehosts);
-
-  /* Send number of dead hosts to ospd-openvas. We need to consider the scan
-   * restrictions.*/
-  if (scanner.scan_restrictions->max_scan_hosts_reached)
+  /* Stop sniffer thread if any alive test besides ALIVE_TEST_CONSIDER_ALIVE was
+   * chosen. */
+  if (alive_test != ALIVE_TEST_CONSIDER_ALIVE)
     {
-      send_dead_hosts_to_ospd_openvas (
-        number_of_targets - scanner.scan_restrictions->max_scan_hosts);
+      g_debug (
+        "%s: all ping packets have been sent, wait a bit for rest of replies.",
+        __func__);
+
+      /* If all targets are already identified as alive we do not need to wait
+       * for replies anymore.*/
+      if (number_of_targets
+          != (int) g_hash_table_size (scanner.hosts_data->alivehosts))
+        sleep (WAIT_FOR_REPLIES_TIMEOUT);
+
+      stop_sniffer_thread (&scanner, sniffer_thread_id);
+    }
+
+  /* If only ICMP was specified we continuously send updates about dead hosts to
+   * ospd while checking the hosts. We now only have to send the dead hosts of
+   * the last batch. This is done here to catch the last alive hosts which may
+   * have arrived after all packets were already sent.
+   * Else send total number of dead host at once.*/
+  if (alive_test == ALIVE_TEST_ICMP)
+    {
+      if (scanner.scan_restrictions->max_scan_hosts_reached)
+        {
+          /* We reached the max_scan_host limit in the last batch. For detailed
+           * description look at the first time where limit_reached_handled is
+           * used.*/
+          if (!limit_reached_handled)
+            {
+              /* Number of alive hosts until limit was reached. */
+              int last_hosts_considered_as_alive =
+                scanner.scan_restrictions->max_scan_hosts - prev_alive;
+              number_of_dead_hosts =
+                remaining_batch - last_hosts_considered_as_alive;
+              send_dead_hosts_to_ospd_openvas (number_of_dead_hosts);
+            }
+          else
+            {
+              send_dead_hosts_to_ospd_openvas (remaining_batch);
+            }
+        }
+      else
+        {
+          int curr_alive = g_hash_table_size (scanner.hosts_data->alivehosts);
+          number_of_dead_hosts = remaining_batch - (curr_alive - prev_alive);
+          send_dead_hosts_to_ospd_openvas (number_of_dead_hosts);
+        }
     }
   else
     {
-      send_dead_hosts_to_ospd_openvas (number_of_dead_hosts);
+      number_of_dead_hosts =
+        number_of_targets - g_hash_table_size (scanner.hosts_data->alivehosts);
+
+      /* Send number of dead hosts to ospd-openvas. We need to consider the scan
+       * restrictions.*/
+      if (scanner.scan_restrictions->max_scan_hosts_reached)
+        send_dead_hosts_to_ospd_openvas (
+          number_of_targets - scanner.scan_restrictions->max_scan_hosts);
+      else
+        send_dead_hosts_to_ospd_openvas (number_of_dead_hosts);
     }
 
   gettimeofday (&end_time, NULL);
 
   g_message ("Alive scan %s finished in %ld seconds: %d alive hosts of %d.",
              scan_id, end_time.tv_sec - start_time.tv_sec,
-             number_of_targets - number_of_dead_hosts, number_of_targets);
+             g_hash_table_size (scanner.hosts_data->alivehosts),
+             number_of_targets);
   g_free (scan_id);
 
   return 0;
@@ -230,14 +352,17 @@ alive_detection_init (gvm_hosts_t *hosts, alive_test_t alive_test)
 
   /* Init ports used for scanning. */
   scanner.ports = NULL;
-  port_list = "80,137,587,3128,8081";
+
+  port_list = get_alive_test_ports ();
+  if (NULL == port_list)
+    port_list = "80,137,587,3128,8081";
   if (validate_port_range (port_list))
     {
       g_warning ("%s: Invalid port range supplied for alive detection module. "
                  "Using global port range instead.",
                  __func__);
-      /* This port list was already validated by openvas so we don't do it here
-       * again. */
+      /* This port list is also used by openvas for scanning and was already
+       * validated by openvas so we don't do it here again. */
       port_list = prefs_get ("port_range");
     }
   /* Use uint16_t for port array elements. tcphdr port type is uint16_t. */
@@ -256,9 +381,19 @@ alive_detection_init (gvm_hosts_t *hosts, alive_test_t alive_test)
 
   /* Scan restrictions. max_scan_hosts related. */
   const gchar *pref_str;
-  int max_scan_hosts = INT_MAX;
+  int max_scan_hosts = INT_MAX, pref_value;
+
+  /* Check that the max_scan_hosts is set and it is greater than 0 */
   if ((pref_str = prefs_get ("max_scan_hosts")) != NULL)
-    max_scan_hosts = atoi (pref_str);
+    {
+      pref_value = atoi (pref_str);
+      if (pref_value > 0)
+        max_scan_hosts = pref_value;
+      else
+        g_debug ("%s: Invalid max_scan_hosts value. It must be an integer "
+                 "greater than zero.",
+                 __func__);
+    }
 
   init_scan_restrictions (&scanner, max_scan_hosts);
 

@@ -38,7 +38,7 @@
 /**
  * @brief GLib log domain.
  */
-#define G_LOG_DOMAIN "alive scan"
+#define G_LOG_DOMAIN "libgvm boreas"
 
 static boreas_error_t
 set_socket (socket_type_t, int *);
@@ -417,7 +417,7 @@ static boreas_error_t
 set_socket (socket_type_t socket_type, int *scanner_socket)
 {
   boreas_error_t error = NO_ERROR;
-  int soc;
+  int soc = -1;
   switch (socket_type)
     {
     case UDPV4:
@@ -641,7 +641,7 @@ so_sndbuf_empty (int soc, int *err)
  * @brief Wait until socket send buffer empty or timeout reached.
  *
  * @param soc     Socket.
- * @param timout  Timeout in seconds.
+ * @param timeout Timeout in seconds.
  */
 void
 wait_until_so_sndbuf_empty (int soc, int timeout)

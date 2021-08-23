@@ -195,6 +195,63 @@ Ensure (hosts, gvm_get_host_type_returns_error)
                is_equal_to (-1));
 }
 
+Ensure (hosts, gvm_hosts_new_with_max_returns_success)
+{
+  assert_that (gvm_hosts_new_with_max ("127.0.0.1", 1), is_not_null);
+  assert_that (gvm_hosts_new_with_max ("127.0.0.1", 2000), is_not_null);
+  assert_that (gvm_hosts_new_with_max ("127.0.0.1,127.0.0.2", 2), is_not_null);
+  assert_that (gvm_hosts_new_with_max ("127.0.0.1, 127.0.0.2", 2), is_not_null);
+}
+
+Ensure (hosts, gvm_hosts_new_with_max_returns_error)
+{
+  /* Host error. */
+  assert_that (gvm_hosts_new_with_max ("a.123", 2), is_null);
+
+  /* More than max_hosts hosts. */
+  assert_that (gvm_hosts_new_with_max ("127.0.0.1, 127.0.0.2", 1), is_null);
+
+  /* Wrong separator. */
+  assert_that (gvm_hosts_new_with_max ("127.0.0.1 127.0.0.2", 2), is_null);
+  assert_that (gvm_hosts_new_with_max ("127.0.0.1|127.0.0.2", 2), is_null);
+}
+
+Ensure (hosts, gvm_hosts_move_host_to_end)
+{
+  gvm_hosts_t *hosts = NULL;
+  gvm_host_t *host = NULL;
+  int totalhosts;
+  size_t current;
+
+  hosts = gvm_hosts_new ("192.168.0.0/28");
+
+  // Get first host
+  host = gvm_hosts_next (hosts);
+
+  totalhosts = gvm_hosts_count (hosts);
+  assert_that (totalhosts, is_equal_to (14));
+
+  while (g_strcmp0 (gvm_host_value_str (host), "192.168.0.9"))
+    {
+      host = gvm_hosts_next (hosts);
+    }
+  assert_that (g_strcmp0 (gvm_host_value_str (host), "192.168.0.9"),
+               is_equal_to (0));
+
+  current = hosts->current;
+  gvm_hosts_move_current_host_to_end (hosts);
+  assert_that (hosts->current, is_equal_to (current - 1));
+
+  host = gvm_hosts_next (hosts);
+  assert_that (g_strcmp0 (gvm_host_value_str (host), "192.168.0.10"),
+               is_equal_to (0));
+  assert_that (g_strcmp0 (gvm_host_value_str (hosts->hosts[totalhosts - 1]),
+                          "192.168.0.9"),
+               is_equal_to (0));
+
+  gvm_hosts_free (hosts);
+}
+
 /* Test suite. */
 
 int
@@ -224,6 +281,11 @@ main (int argc, char **argv)
   add_test_with_context (suite, hosts,
                          gvm_get_host_type_returns_host_type_range6_long);
   add_test_with_context (suite, hosts, gvm_get_host_type_returns_error);
+
+  add_test_with_context (suite, hosts, gvm_hosts_new_with_max_returns_error);
+  add_test_with_context (suite, hosts, gvm_hosts_new_with_max_returns_success);
+
+  add_test_with_context (suite, hosts, gvm_hosts_move_host_to_end);
 
   if (argc > 1)
     return run_single_test (suite, argv[1], create_text_reporter ());

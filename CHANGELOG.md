@@ -4,6 +4,96 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [21.4.2] - 2021-08-03
+
+### Fixed
+- Fix info msg when 0 alive hosts are left to scan and max_scan_hosts limit is reached. No message will be generated for that case anymore. [#564](https://github.com/greenbone/gvm-libs/pull/564)
+
+[21.4.2]: https://github.com/greenbone/gvm-libs/compare/v21.4.1...v21.4.2
+
+## [21.4.1] - 2021-06-23
+
+### Added
+- Possibility to use lcrypt with `$6$` (sha512) for authentication [484](https://github.com/greenbone/gvm-libs/pull/484)
+- Add function to find and return a host from a host list. [490](https://github.com/greenbone/gvm-libs/pull/490)
+
+### Changed
+- Make test_alive_hosts_only (Boreas) feature the new default. [503](https://github.com/greenbone/gvm-libs/pull/503)
+
+### Fixed
+- Unify GLib log domains [#479](https://github.com/greenbone/gvm-libs/pull/479)
+- Fix double free. [#499](https://github.com/greenbone/gvm-libs/pull/499)
+- Fix uninitialized variable error of the gcc. [#477](https://github.com/greenbone/gvm-libs/pull/477)
+
+### Removed
+
+[21.4.1]: https://github.com/greenbone/gvm-libs/compare/v21.4.0...v21.4.1
+
+## [21.4.0] (2021-04-15)
+
+### Added
+- Use dedicated port list for alive detection (Boreas only) if supplied via OSP. [#391](https://github.com/greenbone/gvm-libs/pull/391)
+- Allow to re allocate the finish flag in the host queue for alive tests.
+  [#407](https://github.com/greenbone/gvm-libs/pull/407)
+  [#410](https://github.com/greenbone/gvm-libs/pull/410)
+- Add multiple severities for nvti [#317](https://github.com/greenbone/gvm-libs/pull/317) [#472](https://github.com/greenbone/gvm-libs/pull/472)
+- Add support for new OSP element for defining alive test methods via separate subelements. [#409](https://github.com/greenbone/gvm-libs/pull/409)
+- Add v3 handling to get_cvss_score_from_base_metrics. [#411](https://github.com/greenbone/gvm-libs/pull/411)
+- Add severity_date tag in epoch time format. [#412](https://github.com/greenbone/gvm-libs/pull/412)
+- Make more scanner preferences available to openvas-nasl. [#413](https://github.com/greenbone/gvm-libs/pull/413)
+- Use memory purge redis command when initializing new kb. [#452](https://github.com/greenbone/gvm-libs/pull/452)
+
+### Changed
+- Add separators for a new (ip address) field in ERRMSG and DEADHOST messages. [#376](https://github.com/greenbone/gvm-libs/pull/376)
+- Continuously send dead hosts to ospd-openvas to enable a smooth progress bar if only ICMP is chosen as alive test. [#389](https://github.com/greenbone/gvm-libs/pull/389)
+- Retry if response via tls1.3 is still not received. [#394](https://github.com/greenbone/gvm-libs/pull/394)
+- Replace current implementation of alive test arp ping with version using libnet. [#423](https://github.com/greenbone/gvm-libs/pull/423)
+- Let setup_log_handlers return an error if it does not have write access to some log file or log dir instead of aborting immediately.
+  [#447](https://github.com/greenbone/gvm-libs/pull/447)
+  [#451](https://github.com/greenbone/gvm-libs/pull/451)
+- Fix openvas preference name. The option was rename to "allow_simultaneous_ips". [#461](https://github.com/greenbone/gvm-libs/pull/461)
+- Do not start the sniffer thread when only consider alive is chosen for alive test. [#466](https://github.com/greenbone/gvm-libs/pull/466)]
+
+### Fixed
+- Fix finish_signal_on_queue for boreas. [#464](https://github.com/greenbone/gvm-libs/pull/464)
+
+### Removed
+- Remove handling of severity class from auth [#402](https://github.com/greenbone/gvm-libs/pull/402)
+- Remove version from the nvticache name. [#386](https://github.com/greenbone/gvm-libs/pull/386)
+
+[21.4.0]: https://github.com/greenbone/gvm-libs/compare/gvm-libs-20.08...v21.4.0
+
+## [20.8.3] (unreleased)
+
+### Added
+### Changed
+### Deprecated
+### Removed
+### Fixed
+- Fix info msg when 0 alive hosts are left to scan and max_scan_hosts limit is reached. No message will be generated for that case anymore. [#561](https://github.com/greenbone/gvm-libs/pull/561)
+
+[Unreleased]: https://github.com/greenbone/gvm-libs/compare/v20.8.2...gvm-libs-20.08
+
+## [20.8.2] - 2021-06-23
+
+### Added
+- Add function ldap_enable_debug () [#453](https://github.com/greenbone/gvm-libs/pull/453)
+- Ensure that new kb taken by the scanner are always clean. [#469](https://github.com/greenbone/gvm-libs/pull/469)
+- Validate for max_scan_hosts scanner preference.  [#482](https://github.com/greenbone/gvm-libs/pull/482)
+
+### Changed
+- Use a char pointer instead of an zero-lenght array as kb_redis struct member. [443](https://github.com/greenbone/gvm-libs/pull/443)
+- pba verify returns INVALID instead of ERR when hash or password are null [496](https://github.com/greenbone/gvm-libs/pull/496)
+
+### Fixed
+- Fixing [#434](https://github.com/greenbone/gvm-libs/pull/434) by removing the extra parentheses in `base/networking.c` [#437](https://github.com/greenbone/gvm-libs/pull/437)
+- Adding initialization to struct scanner in `boreas/util_tests.c`. [#438](https://github.com/greenbone/gvm-libs/pull/438)
+- Fix warnings about uninitialized variables. [#448](https://github.com/greenbone/gvm-libs/pull/448)
+- Split the log message into smaller pieces when syslog is the log destination.  [#455](https://github.com/greenbone/gvm-libs/pull/455)
+- Initialize reallocated memory in gvm_hosts_add [#520](https://github.com/greenbone/gvmd/pull/520)
+
+[20.8.2]: https://github.com/greenbone/gvm-libs/compare/v20.8.1...v20.8.2
+
 ## [20.8.1] (2021-02-01)
 
 ### Added

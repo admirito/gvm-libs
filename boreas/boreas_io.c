@@ -30,7 +30,7 @@
 /**
  * @brief GLib log domain.
  */
-#define G_LOG_DOMAIN "alive scan"
+#define G_LOG_DOMAIN "libgvm boreas"
 
 scan_restrictions_t scan_restrictions;
 
@@ -109,7 +109,7 @@ send_limit_msg (int num_not_scanned_hosts)
     {
       char buf[256];
       g_snprintf (buf, 256,
-                  "ERRMSG||| ||| ||| |||Maximum number of allowed scans "
+                  "ERRMSG||| ||| ||| ||| |||Maximum number of allowed scans "
                   "reached. There may still be alive hosts available which are "
                   "not scanned. Number of alive hosts not scanned: [%d]",
                   num_not_scanned_hosts);
@@ -185,7 +185,10 @@ get_host_from_queue (kb_t alive_hosts_kb, gboolean *alive_deteciton_finished)
 
               num_not_scanned_hosts =
                 get_alive_hosts_count () - get_max_scan_hosts ();
-              send_limit_msg (num_not_scanned_hosts);
+              if (0 != num_not_scanned_hosts)
+                {
+                  send_limit_msg (num_not_scanned_hosts);
+                }
             }
           g_debug ("%s: Boreas already finished scanning and we reached the "
                    "end of the Queue of alive hosts.",
@@ -198,17 +201,18 @@ get_host_from_queue (kb_t alive_hosts_kb, gboolean *alive_deteciton_finished)
       else
         {
           host = gvm_host_from_str (host_str);
-          g_free (host_str);
 
           if (!host)
             {
               g_warning ("%s: Could not transform IP string \"%s\" into "
                          "internal representation.",
                          __func__, host_str);
+              g_free (host_str);
               return NULL;
             }
           else
             {
+              g_free (host_str);
               return host;
             }
         }
@@ -221,7 +225,7 @@ get_host_from_queue (kb_t alive_hosts_kb, gboolean *alive_deteciton_finished)
  * @param kb KB to use.
  * @param addr_str IP addr in str representation to put on queue.
  */
-static void
+void
 put_host_on_queue (kb_t kb, char *addr_str)
 {
   /* Print host on command line if no kb is available. No kb available could
@@ -236,6 +240,64 @@ put_host_on_queue (kb_t kb, char *addr_str)
     g_debug ("%s: kb_item_push_str() failed. Could not push \"%s\" on queue of "
              "hosts to be considered as alive.",
              __func__, addr_str);
+}
+
+/**
+ * @brief Checks if the finish signal is already set.
+ *
+ * @param main_kb  kb to use
+ * @return 1 if it is already set. 0 otherwise.
+ */
+int
+finish_signal_on_queue (kb_t main_kb)
+{
+  static gboolean fin_msg_already_on_queue = FALSE;
+  struct kb_item *queue_items = NULL;
+  int ret = 0;
+
+  if (fin_msg_already_on_queue)
+    return 1;
+
+  /* Check if it was already set through the whole items under the key.
+     If so, set the static variable to avoid querying redis unnecessarily. */
+  queue_items = kb_item_get_all (main_kb, ALIVE_DETECTION_QUEUE);
+  if (queue_items)
+    {
+      while (queue_items)
+        {
+          if (!g_strcmp0 (queue_items->v_str, ALIVE_DETECTION_FINISHED))
+            {
+              fin_msg_already_on_queue = TRUE;
+              ret = 1;
+            }
+          queue_items = queue_items->next;
+        }
+      kb_item_free (queue_items);
+    }
+  return ret;
+}
+
+/**
+ * @brief Reallocate finish signal in last position of the alive detection
+ * queue.
+ *
+ * @param main_kb  kb to use
+ */
+void
+realloc_finish_signal_on_queue (kb_t main_kb)
+{
+  int kb_item_push_str_err, pos;
+
+  /* The alive test queue is a FIFO queue. Alive hosts are taken from the
+   * right side of the queue. Therefore the finish signal is put in the
+   * left end of queue, being the last item to be fetch.*/
+  pos = 1;
+  kb_item_push_str_err = kb_item_add_str_unique (
+    main_kb, ALIVE_DETECTION_QUEUE, ALIVE_DETECTION_FINISHED, 0, pos);
+  if (kb_item_push_str_err)
+    g_debug ("%s: Could not push the Boreas finish signal on the alive "
+             "detection Queue.",
+             __func__);
 }
 
 /**
@@ -366,8 +428,8 @@ send_dead_hosts_to_ospd_openvas (int count_dead_hosts)
     }
 
   snprintf (dead_host_msg_to_ospd_openvas,
-            sizeof (dead_host_msg_to_ospd_openvas), "DEADHOST||| ||| ||| |||%d",
-            count_dead_hosts);
+            sizeof (dead_host_msg_to_ospd_openvas),
+            "DEADHOST||| ||| ||| ||| |||%d", count_dead_hosts);
   kb_item_push_str (main_kb, "internal/results", dead_host_msg_to_ospd_openvas);
 
   kb_lnk_reset (main_kb);
@@ -420,4 +482,16 @@ get_alive_test_methods (alive_test_t *alive_test)
       *alive_test = atoi (alive_test_pref_as_str);
     }
   return error;
+}
+
+/**
+ * @brief Get ports which should be used for alive detection in case of TCP-ACK
+ * or TCP-SYN ping.
+ *
+ * @return string containing the ports. NULL otherwise.
+ */
+const gchar *
+get_alive_test_ports (void)
+{
+  return prefs_get ("ALIVE_TEST_PORTS");
 }
