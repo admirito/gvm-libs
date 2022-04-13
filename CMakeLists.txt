@@ -22,7 +22,7 @@ message ("-- Configuring the Greenbone Vulnerability Management Libraries...")
 
 # VERSION: Always include major, minor and patch level.
 project (gvm-libs
-  VERSION 21.4.3
+  VERSION 21.4.4
   LANGUAGES C)
 
 if (POLICY CMP0005)
@@ -176,10 +176,6 @@ endif (NOT DATADIR)
 if (NOT GVM_RUN_DIR)
   set (GVM_RUN_DIR  "/run/gvm")
 endif (NOT GVM_RUN_DIR)
-
-if (NOT GVM_PID_DIR)
-  set (GVM_PID_DIR "${GVM_RUN_DIR}")
-endif (NOT GVM_PID_DIR)
 
 if (NOT GVM_SYSCONF_DIR)
   set (GVM_SYSCONF_DIR "${SYSCONFDIR}/gvm")
