@@ -1,3 +1,9 @@
+gvm-libs (21.4.4-1) focal; urgency=medium
+
+  * Import upstream from version 21.4.4
+
+ -- Mohammad Razavi <mrazavi64@gmail.com>  Wed, 13 Apr 2022 10:09:31 +0430
+
 gvm-libs (21.4.3-1) focal; urgency=medium
 
   * Import upstream from version 21.4.3
