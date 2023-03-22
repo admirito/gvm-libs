@@ -1,4 +1,4 @@
-/* Copyright (C) 2013-2021 Greenbone Networks GmbH
+/* Copyright (C) 2013-2022 Greenbone Networks GmbH
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
@@ -41,6 +41,7 @@
 #include <stdlib.h>     /* for strtol, atoi */
 #include <string.h>     /* for strchr, memcpy, memcmp, bzero, strcasecmp */
 #include <sys/socket.h> /* for AF_INET, AF_INET6, sockaddr */
+#include <unistd.h>     /* for usleep() */
 
 #undef G_LOG_DOMAIN
 /**
@@ -1092,7 +1093,9 @@ gvm_hosts_deduplicate (gvm_hosts_t *hosts)
   hosts->count -= duplicates;
   hosts->duplicated += duplicates;
   hosts->current = 0;
+#ifdef __GLIBC__
   malloc_trim (0);
+#endif
 }
 
 /**
@@ -1287,7 +1290,9 @@ gvm_hosts_new_with_max (const gchar *hosts_str, unsigned int max_hosts)
     gvm_hosts_deduplicate (hosts);
 
   g_strfreev (split);
+#ifdef __GLIBC__
   malloc_trim (0);
+#endif
   return hosts;
 }
 
@@ -1709,7 +1714,7 @@ gvm_host_from_str (const gchar *host_str)
 char *
 gvm_host_reverse_lookup (gvm_host_t *host)
 {
-  int retry = 2;
+  int retry = 10;
   gchar hostname[NI_MAXHOST];
   void *addr;
   size_t addrlen;
@@ -1746,6 +1751,7 @@ gvm_host_reverse_lookup (gvm_host_t *host)
         return g_ascii_strdown (hostname, -1);
       if (ret != EAI_AGAIN)
         break;
+      usleep (10000); // 10ms
     }
   return NULL;
 }

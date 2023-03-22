@@ -1,4 +1,4 @@
-/* Copyright (C) 2014-2021 Greenbone Networks GmbH
+/* Copyright (C) 2014-2022 Greenbone Networks GmbH
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
@@ -28,6 +28,7 @@
 #include <stdio.h>
 #include <string.h> /* for strlen, strdup, bzero, strncpy */
 #include <sys/param.h>
+#include <sys/prctl.h>
 
 #undef G_LOG_DOMAIN
 /**
@@ -42,10 +43,11 @@ extern const char *__progname;
 #ifndef __FreeBSD__
 extern const char *__progname_full;
 #endif
-static int argv_len;
 static char **old_argv;
+static int old_argc;
 extern char **environ;
 void *current_environ = NULL;
+static int max_prog_name = 0;
 
 /**
  * @brief Initializes the process setting variables.
@@ -56,16 +58,28 @@ void *current_environ = NULL;
 void
 proctitle_init (int argc, char **argv)
 {
-  int i = 0;
+  int i;
   char **envp = environ;
 #ifndef __FreeBSD__
   char *new_progname, *new_progname_full;
 #else
   char *new_progname;
 #endif
+  old_argc = argc;
 
   if (argv == NULL)
     return;
+  // according to c99 argv is defined as when argc is set it follows program
+  // parameter. Since we will override on set_proctitle we know that this
+  // memory is modifiable.
+  // Everything after that is unsafe and can lead to segmentation faults.
+  // Therefore we iterate through argv and append strlen to gather the maximum
+  // safe program name.
+  for (i = 0; i < argc; i++)
+    {
+      max_prog_name += strlen (argv[i]) + 1;
+    }
+  i = 0;
 
   new_progname = strdup (__progname);
 #ifndef __FreeBSD__
@@ -84,11 +98,6 @@ proctitle_init (int argc, char **argv)
   environ[i] = NULL;
 
   old_argv = argv;
-  if (i > 0)
-    argv_len = envp[i - 1] + strlen (envp[i - 1]) - old_argv[0];
-  else
-    argv_len = old_argv[argc - 1] + strlen (old_argv[argc - 1]) - old_argv[0];
-
   /* Seems like these are in the moved environment, so reset them.  Idea from
    * proctitle.cpp in KDE libs.  */
   __progname = new_progname;
@@ -106,25 +115,32 @@ proctitle_init (int argc, char **argv)
 static void
 proctitle_set_args (const char *new_title, va_list args)
 {
-  int i;
   char *formatted;
+  int tmp;
 
   if (old_argv == NULL)
     /* Called setproctitle before initproctitle ? */
     return;
+  if (max_prog_name == 0)
+    // there may no program name set
+    return;
+  // omit previous additional parameter
 
   formatted = g_strdup_vprintf (new_title, args);
 
-  i = strlen (formatted);
-  if (i > argv_len - 2)
+  tmp = strlen (formatted);
+  if (tmp > max_prog_name)
     {
-      i = argv_len - 2;
-      formatted[i] = '\0';
+      formatted[max_prog_name] = '\0';
+      tmp = max_prog_name;
     }
-  bzero (old_argv[0], argv_len);
-  strncpy (old_argv[0], formatted, argv_len);
-  old_argv[1] = NULL;
+
+  // set display name
+  memset (old_argv[0], 0, max_prog_name);
+  memcpy (old_argv[0], formatted, tmp);
   g_free (formatted);
+  if (old_argc > 1)
+    old_argv[1] = NULL;
 }
 
 /**

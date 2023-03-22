@@ -1,4 +1,4 @@
-/* Copyright (C) 2009-2021 Greenbone Networks GmbH
+/* Copyright (C) 2009-2022 Greenbone Networks GmbH
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
@@ -56,7 +56,7 @@ Ensure (cvss, get_cvss_score_from_base_metrics_null)
   assert_that (get_cvss_score_from_base_metrics (NULL), is_equal_to (-1.0));
 }
 
-double
+static double
 nearest (double cvss)
 {
   return round (cvss * 10) / 10;

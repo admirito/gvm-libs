@@ -27,6 +27,7 @@ RUN apt-get update && \
     libnet1 \
     libldap-2.4-2 \
     libradcli4 \
+    libpaho-mqtt1.3 \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=build /install/ /

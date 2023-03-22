@@ -1,4 +1,4 @@
-/* Copyright (C) 2014-2021 Greenbone Networks GmbH
+/* Copyright (C) 2014-2022 Greenbone Networks GmbH
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
@@ -24,6 +24,8 @@
  * A global store of preferences to scanner and NVTs is handled by this
  * module.
  */
+
+#include "prefs.h"
 
 #include "settings.h" /* for init_settings_iterator_from_file */
 
@@ -78,6 +80,7 @@ prefs_init (void)
   prefs_set ("report_host_details", "yes");
   prefs_set ("vendor_version", "\0");
   prefs_set ("test_alive_hosts_only", "yes");
+  prefs_set ("test_alive_wait_timeout", "3");
   prefs_set ("debug_tls", "0");
   prefs_set ("allow_simultaneous_ips", "yes");
 }
@@ -172,7 +175,8 @@ prefs_config (const char *config)
   if (!global_prefs)
     prefs_init ();
 
-  strncpy (buffer, config, sizeof (buffer));
+  memset (buffer, 0, sizeof (buffer));
+  memcpy (buffer, config, sizeof (buffer) - 1);
   if (!init_settings_iterator_from_file (&settings, buffer, "Misc"))
     {
       while (settings_iterator_next (&settings))
@@ -202,24 +206,4 @@ prefs_dump (void)
           printf ("%s = %s\n", (char *) name, (char *) value);
         }
     }
-}
-
-/**
- * @brief Returns the timeout defined by the client or 0 if none was set.
- *
- * @param oid         OID of NVT to ask timeout value of.
- *
- * @return 0 if no timeout for the NVT oid was found, timeout in seconds
- *         otherwise.
- */
-int
-prefs_nvt_timeout (const char *oid)
-{
-  char *pref_name = g_strdup_printf ("timeout.%s", oid);
-  const char *val = prefs_get (pref_name);
-  int timeout = (val ? atoi (val) : 0);
-
-  g_free (pref_name);
-
-  return timeout;
 }

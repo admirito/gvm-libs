@@ -1,4 +1,4 @@
-/* Copyright (C) 2010-2021 Greenbone Networks GmbH
+/* Copyright (C) 2010-2022 Greenbone Networks GmbH
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
@@ -42,7 +42,7 @@
  *
  * @return 0 success, -1 error.
  */
-int
+static int
 settings_init_from_file (settings_t *settings, const gchar *filename,
                          const gchar *group)
 {

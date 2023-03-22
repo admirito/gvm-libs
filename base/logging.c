@@ -1,4 +1,4 @@
-/* Copyright (C) 2017-2021 Greenbone Networks GmbH
+/* Copyright (C) 2017-2022 Greenbone Networks GmbH
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
@@ -28,6 +28,8 @@
  */
 
 #include "logging.h"
+
+#include "gvm_sentry.h" /* for gvm_sentry_log */
 
 #include <errno.h>  /* for errno */
 #include <libgen.h> /* for dirname */
@@ -381,6 +383,57 @@ gvm_log_unlock (void)
   g_mutex_unlock (logger_mutex);
 }
 
+static char *reference = NULL;
+
+/**
+ * @brief Set the log reference object.
+ *
+ * In order to be able to see which logs are related to each other, we define a
+ * common reference for them. E.g. when multiple scans in OpenVAS are running
+ * simultaniousely it is possible to detect all log corresponding to the same
+ * scan. The log reference is optional and must be set before calling
+ * setup_log_handlers. The data given must be freed by calling
+ * free_log_reference(). If called multiple times the old reference gets freed
+ * and the new one is set instead.
+ *
+ * @param ref
+ */
+void
+set_log_reference (char *ref)
+{
+  if (reference)
+    g_free ((char *) reference);
+  reference = ref;
+}
+
+/**
+ * @brief Get the log reference object
+ *
+ * This function returns the current log reference. This enables the possibility
+ * to save or modify the current reference value.
+ *
+ * @return char*
+ */
+char *
+get_log_reference (void)
+{
+  return (char *) reference;
+}
+
+/**
+ * @brief Free the log reference object
+ *
+ * The reference object is used to detect corresponding logs.
+ *
+ */
+void
+free_log_reference (void)
+{
+  if (reference)
+    g_free ((char *) reference);
+  reference = NULL;
+}
+
 /**
  * @brief Creates the formatted string and outputs it to the log destination.
  *
@@ -522,9 +575,19 @@ gvm_log_func (const char *log_domain, GLogLevelFlags log_level,
       /* If the current char is a % and the next one is a p, get the pid. */
       if ((*tmp == '%') && (*(tmp + 1) == 'p'))
         {
-          /* Use g_strdup, a new string returned. Store it in a tmp var until
-           * we free the old one. */
-          prepend_tmp = g_strdup_printf ("%s%d", prepend_buf, (int) getpid ());
+          if (reference)
+            {
+              prepend_tmp =
+                g_strdup_printf ("%s%d%s%s", prepend_buf, (int) getpid (),
+                                 log_separator, reference);
+            }
+          else
+            {
+              /* Use g_strdup, a new string returned. Store it in a tmp var
+               * until we free the old one. */
+              prepend_tmp =
+                g_strdup_printf ("%s%d", prepend_buf, (int) getpid ());
+            }
           /* Free the old string. */
           g_free (prepend_buf);
           /* Point the buf ptr to the new string. */
@@ -625,6 +688,9 @@ gvm_log_func (const char *log_domain, GLogLevelFlags log_level,
                             log_separator, prepend, log_separator, messagelen,
                             message);
   g_free (prepend);
+
+  if (log_level <= G_LOG_LEVEL_WARNING)
+    gvm_sentry_log (message);
 
   gvm_log_lock ();
   /* Output everything to stderr if logfile is "-". */

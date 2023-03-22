@@ -1,4 +1,4 @@
-/* Copyright (C) 2013-2021 Greenbone Networks GmbH
+/* Copyright (C) 2013-2022 Greenbone Networks GmbH
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
@@ -111,7 +111,7 @@ int
 port_in_port_ranges (int, port_protocol_t, array_t *);
 
 int
-ipv6_is_enabled ();
+ipv6_is_enabled (void);
 
 gchar *
 gvm_routethrough (struct sockaddr_storage *, struct sockaddr_storage *);

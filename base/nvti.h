@@ -1,4 +1,4 @@
-/* Copyright (C) 2009-2021 Greenbone Networks GmbH
+/* Copyright (C) 2009-2022 Greenbone Networks GmbH
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
@@ -28,6 +28,8 @@
 #define _NVTI_H
 
 #include <glib.h>
+
+#define NVTPREF_TIMEOUT_ID 0
 
 typedef struct nvtpref nvtpref_t;
 
@@ -105,6 +107,8 @@ vtseverity_t *
 nvti_vtseverity (const nvti_t *, guint);
 double
 nvti_severity_score (const nvti_t *);
+gchar *
+nvti_severity_vector_from_tag (const nvti_t *);
 
 nvti_t *
 nvti_new (void);

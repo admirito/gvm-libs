@@ -1,4 +1,4 @@
-/* Copyright (C) 2012-2021 Greenbone Networks GmbH
+/* Copyright (C) 2012-2022 Greenbone Networks GmbH
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
@@ -65,12 +65,17 @@ ldap_log (const char *message)
  * @return 0 success, -1 error.
  */
 int
-ldap_enable_debug ()
+ldap_enable_debug (void)
 {
   int ret;
   static int debug_level = 65535;
 
-  ret = ber_set_option (NULL, LBER_OPT_LOG_PRINT_FN, ldap_log);
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wpedantic"
+  // although casting to object pointer is undefined it usually works.
+  // since this method is not defined by us it is ignored.
+  ret = ber_set_option (NULL, LBER_OPT_LOG_PRINT_FN, (void *) ldap_log);
+#pragma GCC diagnostic pop
   if (ret != LBER_OPT_SUCCESS)
     {
       g_warning ("%s: Failed to set LDAP debug print function: %s", __func__,
@@ -328,6 +333,31 @@ ldap_auth_bind (const gchar *host, const gchar *userdn, const gchar *password,
                   g_free (ldapuri);
                   goto fail;
                 }
+              // Set LDAP version to 3 after initialization
+              ldap_return =
+                ldap_set_option (ldap, LDAP_OPT_PROTOCOL_VERSION, &ldapv3);
+              if (ldap_return != LDAP_SUCCESS)
+                {
+                  g_warning (
+                    "Aborting, could not set ldap protocol version to 3: %s.",
+                    ldap_err2string (ldap_return));
+                  g_free (ldapuri);
+                  goto fail;
+                }
+            }
+        }
+      else
+        {
+          // Set LDAP version to 3 after initialization
+          ldap_return =
+            ldap_set_option (ldap, LDAP_OPT_PROTOCOL_VERSION, &ldapv3);
+          if (ldap_return != LDAP_SUCCESS)
+            {
+              g_warning (
+                "Aborting, could not set ldap protocol version to 3: %s.",
+                ldap_err2string (ldap_return));
+              g_free (ldapuri);
+              goto fail;
             }
         }
     }

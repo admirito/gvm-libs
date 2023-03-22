@@ -1,4 +1,4 @@
-/* Copyright (C) 2009-2021 Greenbone Networks GmbH
+/* Copyright (C) 2009-2022 Greenbone Networks GmbH
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
@@ -133,7 +133,7 @@ nvticache_check (const gchar *filename)
  * @brief Reset connection to KB. To be called after a fork().
  */
 void
-nvticache_reset ()
+nvticache_reset (void)
 {
   if (cache_kb)
     kb_lnk_reset (cache_kb);
@@ -189,14 +189,10 @@ nvt_feed_version ()
  * @brief Save the nvticache to disk.
  */
 void
-nvticache_save ()
+nvticache_save (void)
 {
   char *feed_version, *old_version;
-  if (cache_kb && !cache_saved)
-    {
-      kb_save (cache_kb);
-      cache_saved = 1;
-    }
+
   old_version = nvticache_feed_version ();
   feed_version = nvt_feed_version ();
   if (feed_version && g_strcmp0 (old_version, feed_version))
@@ -408,26 +404,6 @@ nvticache_get_category (const char *oid)
   category = atoi (category_s);
   g_free (category_s);
   return category;
-}
-
-/**
- * @brief Get the Timeout from a plugin OID.
- *
- * @param[in]   oid     OID to match.
- *
- * @return Timeout matching OID, -1 otherwise.
- */
-int
-nvticache_get_timeout (const char *oid)
-{
-  int timeout;
-  char *timeout_s;
-
-  assert (cache_kb);
-  timeout_s = kb_nvt_get (cache_kb, oid, NVT_TIMEOUT_POS);
-  timeout = atoi (timeout_s);
-  g_free (timeout_s);
-  return timeout;
 }
 
 /**

@@ -1,4 +1,4 @@
-/* Copyright (C) 2020-2021 Greenbone Networks GmbH
+/* Copyright (C) 2020-2022 Greenbone Networks GmbH
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
@@ -32,6 +32,9 @@
  */
 #define G_LOG_DOMAIN "libgvm boreas"
 
+/* how long (in sec) to wait for replies after last packet was sent */
+#define WAIT_FOR_REPLIES_TIMEOUT 3
+
 scan_restrictions_t scan_restrictions;
 
 /**
@@ -48,7 +51,7 @@ max_scan_hosts_reached ()
 /**
  * @brief Set max_scan_hosts_reached to TRUE.
  */
-void
+static void
 set_max_scan_hosts_reached ()
 {
   scan_restrictions.max_scan_hosts_reached = TRUE;
@@ -59,7 +62,7 @@ set_max_scan_hosts_reached ()
  *
  * @return Number of identified alive hosts.
  * */
-static int
+int
 get_alive_hosts_count ()
 {
   return scan_restrictions.alive_hosts_count;
@@ -228,14 +231,6 @@ get_host_from_queue (kb_t alive_hosts_kb, gboolean *alive_deteciton_finished)
 void
 put_host_on_queue (kb_t kb, char *addr_str)
 {
-  /* Print host on command line if no kb is available. No kb available could
-   * mean that boreas is used as commandline tool.*/
-  if (NULL == kb)
-    {
-      g_printf ("%s\n", addr_str);
-      return;
-    }
-
   if (kb_item_push_str (kb, ALIVE_DETECTION_QUEUE, addr_str) != 0)
     g_debug ("%s: kb_item_push_str() failed. Could not push \"%s\" on queue of "
              "hosts to be considered as alive.",
@@ -361,7 +356,7 @@ put_finish_signal_on_queue (void *error)
  * scan limit.
  */
 void
-init_scan_restrictions (struct scanner *scanner, int max_scan_hosts)
+init_scan_restrictions (scanner_t *scanner, int max_scan_hosts)
 {
   scan_restrictions.alive_hosts_count = 0;
   scan_restrictions.max_scan_hosts_reached = FALSE;
@@ -382,12 +377,24 @@ init_scan_restrictions (struct scanner *scanner, int max_scan_hosts)
  * @param add_str Host address string to put on queue.
  */
 void
-handle_scan_restrictions (struct scanner *scanner, gchar *addr_str)
+handle_scan_restrictions (scanner_t *scanner, gchar *addr_str)
 {
+  kb_t kb = scanner->main_kb;
+
   inc_alive_hosts_count ();
   /* Put alive hosts on queue as long as max_scan_hosts not reached. */
   if (!max_scan_hosts_reached ())
-    put_host_on_queue (scanner->main_kb, addr_str);
+    {
+      /* Print host on command line if no kb is available. No kb available could
+       * mean that boreas is used as commandline tool.*/
+      if (kb != NULL)
+        put_host_on_queue (kb, addr_str);
+      else
+        {
+          if (scanner->print_results == 1)
+            g_printf ("%s\n", addr_str);
+        }
+    }
 
   /* Set max_scan_hosts_reached if not already set and max_scan_hosts was
    * reached. */
@@ -493,5 +500,30 @@ get_alive_test_methods (alive_test_t *alive_test)
 const gchar *
 get_alive_test_ports (void)
 {
+  if (prefs_get ("alive_test_ports"))
+    return prefs_get ("alive_test_ports");
   return prefs_get ("ALIVE_TEST_PORTS");
+}
+
+/**
+ * @brief Get the max time in seconds that boreas waits for replies.
+ * Minimum is 1 second. Max is 20. If a given value is invalid or greather
+ * than 20, it is set to WAIT_FOR_REPLIES_TIMEOUT
+ *
+ * @return unsigned integer for the time in seconds.
+ */
+unsigned int
+get_alive_test_wait_timeout (void)
+{
+  unsigned int timeout = -1;
+  const gchar *str_timeout = NULL;
+
+  str_timeout = prefs_get ("test_alive_wait_timeout");
+  if (str_timeout != NULL)
+    timeout = atoi (str_timeout);
+
+  if (timeout > 0 && timeout <= 20)
+    return timeout;
+
+  return WAIT_FOR_REPLIES_TIMEOUT;
 }

@@ -1,4 +1,4 @@
-/* Copyright (C) 2020-2021 Greenbone Networks GmbH
+/* Copyright (C) 2020-2022 Greenbone Networks GmbH
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
@@ -47,6 +47,10 @@ bool g_socket_use_real = true;
 int
 __wrap_socket (__attribute__ ((unused)) int domain,
                __attribute__ ((unused)) int type,
+               __attribute__ ((unused)) int protocol);
+int
+__wrap_socket (__attribute__ ((unused)) int domain,
+               __attribute__ ((unused)) int type,
                __attribute__ ((unused)) int protocol)
 {
   if (g_socket_use_real)
@@ -56,6 +60,12 @@ __wrap_socket (__attribute__ ((unused)) int domain,
 }
 
 bool g_setsockopt_use_real = true;
+int
+__wrap_setsockopt (__attribute__ ((unused)) int sockfd,
+                   __attribute__ ((unused)) int level,
+                   __attribute__ ((unused)) int optname,
+                   __attribute__ ((unused)) const void *optval,
+                   __attribute__ ((unused)) socklen_t optlen);
 int
 __wrap_setsockopt (__attribute__ ((unused)) int sockfd,
                    __attribute__ ((unused)) int level,
@@ -75,7 +85,7 @@ Ensure (util, set_all_needed_sockets)
   g_setsockopt_use_real = false;
 
   alive_test_t alive_test;
-  struct scanner scanner = {0};
+  scanner_t scanner = {0};
 
   /* All methods set. */
   alive_test = ALIVE_TEST_TCP_ACK_SERVICE | ALIVE_TEST_ICMP | ALIVE_TEST_ARP

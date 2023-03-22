@@ -1,4 +1,4 @@
-/* Copyright (C) 2020-2021 Greenbone Networks GmbH
+/* Copyright (C) 2020-2022 Greenbone Networks GmbH
  *
  * SPDX-License-Identifier: GPL-3.0-or-later
  *
@@ -40,7 +40,7 @@
 #define CRYPT_OUTPUT_SIZE 384
 #endif
 
-int
+static int
 is_prefix_supported (const char *id)
 {
   return strcmp (PREFIX_DEFAULT, id) == 0;
@@ -57,7 +57,7 @@ const char ascii64[64] =
   "./0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
 
 /* Tries to get BUFLEN random bytes into BUF; returns 0 on success. */
-int
+static int
 get_random (char *buf, size_t buflen)
 {
   FILE *fp = fopen ("/dev/urandom", "r");
@@ -90,6 +90,9 @@ exit:
  * OUTPUT_SIZE must be at least CRYPT_GENSALT_OUTPUT_SIZE.
  *
  * */
+char *
+crypt_gensalt_r (const char *prefix, unsigned long count, const char *rbytes,
+                 int nrbytes, char *output, int output_size);
 char *
 crypt_gensalt_r (const char *prefix, unsigned long count, const char *rbytes,
                  int nrbytes, char *output, int output_size)
@@ -163,7 +166,7 @@ pba_finalize (struct PBASettings *settings)
   free (settings);
 }
 
-int
+static int
 pba_is_phc_compliant (const char *setting)
 {
   if (setting == NULL)
@@ -201,8 +204,8 @@ pba_hash (struct PBASettings *setting, const char *password)
   rslt = crypt_r (password, settings, data);
   if (rslt == NULL)
     goto exit;
-  result = malloc (CRYPT_OUTPUT_SIZE);
-  strncpy (result, rslt, CRYPT_OUTPUT_SIZE);
+  result = calloc (1, CRYPT_OUTPUT_SIZE);
+  memcpy (result, rslt, CRYPT_OUTPUT_SIZE);
   // remove pepper, by jumping to begin of applied pepper within result
   // and overriding it.
   tmp = result + (tmp - settings);
@@ -236,8 +239,8 @@ pba_verify_hash (const struct PBASettings *setting, const char *hash,
     {
       data = calloc (1, sizeof (struct crypt_data));
       // manipulate hash to reapply pepper
-      tmp = malloc (CRYPT_OUTPUT_SIZE);
-      strncpy (tmp, hash ? hash : INVALID_HASH, CRYPT_OUTPUT_SIZE);
+      tmp = calloc (1, CRYPT_OUTPUT_SIZE);
+      memcpy (tmp, hash ? hash : INVALID_HASH, CRYPT_OUTPUT_SIZE);
       cmp = strrchr (tmp, '$');
       for (i = MAX_PEPPER_SIZE - 1; i > -1; i--)
         {

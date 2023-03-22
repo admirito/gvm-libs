@@ -1,4 +1,4 @@
-/* Copyright (C) 2012-2021 Greenbone Networks GmbH
+/* Copyright (C) 2012-2022 Greenbone Networks GmbH
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
@@ -76,9 +76,11 @@
  *                       complete:          0.660
  */
 
+#include "cvss.h"
+
 #include <glib.h>
 #include <math.h>
-#include <string.h>
+#include <strings.h>
 
 #undef G_LOG_DOMAIN
 /**

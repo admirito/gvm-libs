@@ -1,4 +1,4 @@
-/* Copyright (C) 2014-2021 Greenbone Networks GmbH
+/* Copyright (C) 2014-2022 Greenbone Networks GmbH
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
@@ -95,11 +95,18 @@ osp_connection_close (osp_connection_t *);
 
 /* OSP commands */
 int
+osp_check_feed (osp_connection_t *, int *, int *, char **, char **);
+
+int
 osp_get_version (osp_connection_t *, char **, char **, char **, char **,
                  char **, char **);
 
 int
 osp_get_vts_version (osp_connection_t *, char **, char **error);
+
+int
+osp_get_vts_feed_info (osp_connection_t *, char **, char **, char **, char **,
+                       char **);
 
 int
 osp_get_vts (osp_connection_t *, entity_t *);

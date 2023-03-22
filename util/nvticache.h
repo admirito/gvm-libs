@@ -1,4 +1,4 @@
-/* Copyright (C) 2009-2021 Greenbone Networks GmbH
+/* Copyright (C) 2009-2022 Greenbone Networks GmbH
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
@@ -40,13 +40,13 @@ int
 nvticache_init (const char *, const char *);
 
 void
-nvticache_reset ();
+nvticache_reset (void);
 
 kb_t
-nvticache_get_kb ();
+nvticache_get_kb (void);
 
 void
-nvticache_save ();
+nvticache_save (void);
 
 int
 nvticache_initialized (void);
@@ -104,9 +104,6 @@ nvticache_get_required_udp_ports (const char *);
 
 int
 nvticache_get_category (const char *);
-
-int
-nvticache_get_timeout (const char *);
 
 char *
 nvticache_get_dependencies (const char *);

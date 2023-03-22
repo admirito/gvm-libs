@@ -33,6 +33,7 @@ RUN apt-get update && \
     libnet1-dev \
     libldap2-dev \
     libradcli-dev \
+    libpaho-mqtt-dev \
     libcgreen1-dev \
     lcov \
     && rm -rf /var/lib/apt/lists/*

@@ -1,4 +1,4 @@
-/* Copyright (C) 2020-2021 Greenbone Networks GmbH
+/* Copyright (C) 2020-2022 Greenbone Networks GmbH
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
@@ -132,17 +132,18 @@ got_packet (u_char *user_data,
 {
   struct ip *ip;
   unsigned int version;
-  struct scanner *scanner;
+  scanner_t *scanner;
   hosts_data_t *hosts_data;
+  gchar *addr_str = NULL;
 
   ip = (struct ip *) (packet + 16);
   version = ip->ip_v;
-  scanner = (struct scanner *) user_data;
+  scanner = (scanner_t *) user_data;
   hosts_data = (hosts_data_t *) scanner->hosts_data;
 
   if (version == 4)
     {
-      gchar addr_str[INET_ADDRSTRLEN];
+      addr_str = g_malloc0 (INET_ADDRSTRLEN);
       struct in_addr sniffed_addr;
       /* was +26 (14 ETH + 12 IP) originally but was off by 2 somehow */
       memcpy (&sniffed_addr.s_addr, packet + 26 + 2, 4);
@@ -152,20 +153,10 @@ got_packet (u_char *user_data,
         g_debug (
           "%s: Failed to transform IPv4 address into string representation: %s",
           __func__, strerror (errno));
-
-      /* Only put unique hosts on queue and in hash table. Use short circuit
-       * evaluation to not add hosts to the hash table which are not in our
-       * target list.*/
-      if ((g_hash_table_contains (hosts_data->targethosts, addr_str) == TRUE)
-          && (g_hash_table_add (hosts_data->alivehosts, g_strdup (addr_str))))
-        {
-          /* handle max_scan_hosts related restrictions. */
-          handle_scan_restrictions (scanner, addr_str);
-        }
     }
   else if (version == 6)
     {
-      gchar addr_str[INET6_ADDRSTRLEN];
+      addr_str = g_malloc0 (INET6_ADDRSTRLEN);
       struct in6_addr sniffed_addr;
       /* (14 ETH + 8 IP + offset 2)  */
       memcpy (&sniffed_addr.s6_addr, packet + 24, 16);
@@ -174,16 +165,6 @@ got_packet (u_char *user_data,
           == NULL)
         g_debug ("%s: Failed to transform IPv6 into string representation: %s",
                  __func__, strerror (errno));
-
-      /* Only put unique hosts on queue and in hash table. Use short circuit
-       * evaluation to not add hosts to the hash table which are not in our
-       * target list.*/
-      if ((g_hash_table_contains (hosts_data->targethosts, addr_str) == TRUE)
-          && (g_hash_table_add (hosts_data->alivehosts, g_strdup (addr_str))))
-        {
-          /* handle max_scan_hosts related restrictions. */
-          handle_scan_restrictions (scanner, addr_str);
-        }
     }
   /* TODO: check collision situations.
    * everything not ipv4/6 is regarded as arp.
@@ -197,22 +178,22 @@ got_packet (u_char *user_data,
       to get it */
       struct arphdr *arp =
         (struct arphdr *) (packet + 14 + 2 + 6 + sizeof (struct arphdr));
-      gchar addr_str[INET_ADDRSTRLEN];
+      addr_str = g_malloc0 (INET_ADDRSTRLEN);
       if (inet_ntop (AF_INET, (const char *) arp, addr_str, INET_ADDRSTRLEN)
           == NULL)
         g_debug ("%s: Failed to transform IP into string representation: %s",
                  __func__, strerror (errno));
-
-      /* Only put unique hosts on queue and in hash table. Use short circuit
-       * evaluation to not add hosts to the hash table which are not in our
-       * target list.*/
-      if ((g_hash_table_contains (hosts_data->targethosts, addr_str) == TRUE)
-          && (g_hash_table_add (hosts_data->alivehosts, g_strdup (addr_str))))
-        {
-          /* handle max_scan_hosts related restrictions. */
-          handle_scan_restrictions (scanner, addr_str);
-        }
     }
+  /* Only put unique hosts on queue and in hash table. Use short circuit
+   * evaluation to not add hosts to the hash table which are not in our
+   * target list.*/
+  if ((g_hash_table_contains (hosts_data->targethosts, addr_str) == TRUE)
+      && (g_hash_table_add (hosts_data->alivehosts, g_strdup (addr_str))))
+    {
+      /* handle max_scan_hosts related restrictions. */
+      handle_scan_restrictions (scanner, addr_str);
+    }
+  g_free (addr_str);
 }
 
 /**
@@ -224,7 +205,7 @@ static void *
 sniffer_thread (void *scanner_p)
 {
   int ret;
-  struct scanner *scanner = (struct scanner *) scanner_p;
+  scanner_t *scanner = (scanner_t *) scanner_p;
 
   pthread_mutex_lock (&mutex);
   pthread_cond_signal (&cond);
@@ -254,9 +235,13 @@ sniffer_thread (void *scanner_p)
  * @return 0 on success, other on Error.
  */
 int
-stop_sniffer_thread (struct scanner *scanner, pthread_t sniffer_thread_id)
+stop_sniffer_thread (scanner_t *scanner, pthread_t sniffer_thread_id)
 {
-  int err;
+  // wait period for grace in microseconds
+  const int wait = 5000;
+  // maximum grace period in microseconds
+  const int max_grace = 2 * 1000 * 1000;
+  int err, waited;
   void *retval;
 
   g_debug ("%s: Try to stop thread which is sniffing for alive hosts. ",
@@ -264,7 +249,10 @@ stop_sniffer_thread (struct scanner *scanner, pthread_t sniffer_thread_id)
   /* Try to break loop in sniffer thread. */
   pcap_breakloop (scanner->pcap_handle);
   /* Give thread chance to exit on its own. */
-  sleep (2);
+  for (waited = 0;
+       waited < max_grace && pthread_kill (sniffer_thread_id, 0) != ESRCH;
+       waited += wait)
+    usleep (wait);
 
   /* Cancel thread. May be necessary if pcap_breakloop() does not break the
    * loop. */
@@ -305,7 +293,7 @@ stop_sniffer_thread (struct scanner *scanner, pthread_t sniffer_thread_id)
  * @return 0 on success, other on Error.
  */
 int
-start_sniffer_thread (struct scanner *scanner, pthread_t *sniffer_thread_id)
+start_sniffer_thread (scanner_t *scanner, pthread_t *sniffer_thread_id)
 {
   int err;
 
@@ -330,7 +318,6 @@ start_sniffer_thread (struct scanner *scanner, pthread_t *sniffer_thread_id)
   /* Mutex and cond not needed anymore. */
   pthread_mutex_destroy (&mutex);
   pthread_cond_destroy (&cond);
-  sleep (2);
 
   return err;
 }

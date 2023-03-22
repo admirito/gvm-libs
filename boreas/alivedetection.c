@@ -1,4 +1,4 @@
-/* Copyright (C) 2020-2021 Greenbone Networks GmbH
+/* Copyright (C) 2020-2022 Greenbone Networks GmbH
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
@@ -54,7 +54,7 @@
  */
 #define G_LOG_DOMAIN "libgvm boreas"
 
-struct scanner scanner;
+scanner_t scanner;
 
 /**
  * @brief Scan function starts a sniffing thread which waits for packets to
@@ -230,12 +230,13 @@ scan (alive_test_t alive_test)
         "%s: all ping packets have been sent, wait a bit for rest of replies.",
         __func__);
 
-      /* If all targets are already identified as alive we do not need to wait
-       * for replies anymore.*/
-      if (number_of_targets
-          != (int) g_hash_table_size (scanner.hosts_data->alivehosts))
-        sleep (WAIT_FOR_REPLIES_TIMEOUT);
-
+      for (unsigned int i = 0; i < get_alive_test_wait_timeout (); i++)
+        {
+          if (number_of_targets
+              == (int) g_hash_table_size (scanner.hosts_data->alivehosts))
+            break;
+          sleep (1); // 1 second is the minimum wait time
+        }
       stop_sniffer_thread (&scanner, sniffer_thread_id);
     }
 
@@ -323,6 +324,9 @@ alive_detection_init (gvm_hosts_t *hosts, alive_test_t alive_test)
   if ((error = set_all_needed_sockets (&scanner, alive_test)) != 0)
     return error;
 
+  /* Do not print results in stdout. Only set for command line clients*/
+  scanner.print_results = 0;
+
   /* kb_t redis connection */
   int scandb_id = atoi (prefs_get ("ov_maindbid"));
   if ((scanner.main_kb = kb_direct_conn (prefs_get ("db_address"), scandb_id))
@@ -355,7 +359,7 @@ alive_detection_init (gvm_hosts_t *hosts, alive_test_t alive_test)
 
   port_list = get_alive_test_ports ();
   if (NULL == port_list)
-    port_list = "80,137,587,3128,8081";
+    port_list = DEFAULT_PORT_LIST;
   if (validate_port_range (port_list))
     {
       g_warning ("%s: Invalid port range supplied for alive detection module. "
@@ -510,7 +514,7 @@ start_alive_detection (void *hosts_to_test)
   /* Free memory, close sockets and connections. */
   pthread_cleanup_pop (1);
   if (free_err)
-    g_warning ("%s: %s. Exit Boreas thread none the less.", __func__,
+    g_warning ("%s: %s. Exit Boreas thread nonetheless.", __func__,
                str_boreas_error (free_err));
 
   pthread_exit (0);

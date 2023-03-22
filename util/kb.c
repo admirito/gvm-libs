@@ -1,4 +1,4 @@
-/* Copyright (C) 2014-2021 Greenbone Networks GmbH
+/* Copyright (C) 2014-2022 Greenbone Networks GmbH
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
@@ -254,6 +254,59 @@ err_cleanup:
   return rc;
 }
 
+static inline char *
+parse_port_of_addr (const char *addr, int tcp_indicator_len)
+{
+  char *tmp;
+  int is_ip_v6;
+  if ((tmp = rindex (addr + tcp_indicator_len, ':')) == NULL)
+    return NULL;
+  is_ip_v6 = addr[tcp_indicator_len] == '[';
+  if (is_ip_v6 && (tmp - 1)[0] != ']')
+    return NULL;
+  return tmp + 1;
+}
+
+static redisContext *
+connect_redis (const char *addr, int len)
+{
+  const char *tcp_indicator = "tcp://";
+  const int tcp_indicator_len = strlen (tcp_indicator);
+  const int redis_default_port = 6379;
+
+  int port, host_len;
+  char *tmp, *host;
+  redisContext *result;
+  static int warn_flag = 0;
+
+  if (len < tcp_indicator_len + 1)
+    goto unix_connect;
+  if (memcmp (addr, tcp_indicator, tcp_indicator_len) != 0)
+    goto unix_connect;
+  host_len = len - tcp_indicator_len;
+  if ((tmp = parse_port_of_addr (addr, tcp_indicator_len)) == NULL)
+    port = redis_default_port;
+  else
+    {
+      port = atoi (tmp);
+      host_len -= strlen (tmp) + 1;
+    }
+  host = calloc (1, host_len);
+  memmove (host, addr + tcp_indicator_len, host_len);
+  result = redisConnect (host, port);
+  if (warn_flag == 0)
+    {
+      g_warning ("A Redis TCP connection is being used. This feature is "
+                 "experimental and insecure, since it is not an encrypted "
+                 "channel. We discourage its usage in production environments");
+      warn_flag = 1;
+    }
+  free (host);
+  return result;
+unix_connect:
+  return redisConnectUnix (addr);
+}
+
 /**
  * @brief Get redis context if it is already connected or do a
  *        a connection.
@@ -271,7 +324,7 @@ get_redis_ctx (struct kb_redis *kbr)
   if (kbr->rctx != NULL)
     return 0;
 
-  kbr->rctx = redisConnectUnix (kbr->path);
+  kbr->rctx = connect_redis (kbr->path, strlen (kbr->path));
   if (kbr->rctx == NULL || kbr->rctx->err)
     {
       g_log (G_LOG_DOMAIN, G_LOG_LEVEL_CRITICAL,
@@ -477,7 +530,7 @@ redis_direct_conn (const char *kb_path, const int kb_index)
   kbr->kb.kb_ops = &KBRedisOperations;
   kbr->path = g_strdup (kb_path);
 
-  kbr->rctx = redisConnectUnix (kbr->path);
+  kbr->rctx = connect_redis (kbr->path, strlen (kbr->path));
   if (kbr->rctx == NULL || kbr->rctx->err)
     {
       g_log (G_LOG_DOMAIN, G_LOG_LEVEL_CRITICAL,
@@ -529,7 +582,7 @@ redis_find (const char *kb_path, const char *key)
     {
       redisReply *rep;
 
-      kbr->rctx = redisConnectUnix (kbr->path);
+      kbr->rctx = connect_redis (kbr->path, strlen (kbr->path));
       if (kbr->rctx == NULL || kbr->rctx->err)
         {
           g_log (G_LOG_DOMAIN, G_LOG_LEVEL_CRITICAL,
@@ -648,7 +701,8 @@ redis2kbitem_single (const char *name, const redisReply *elt, int force_int)
 
   item->next = NULL;
   item->namelen = namelen;
-  strncpy (item->name, name, namelen);
+  memset (item->name, 0, namelen);
+  memcpy (item->name, name, namelen);
 
   return item;
 }
@@ -971,7 +1025,6 @@ redis_get_nvt_all (kb_t kb, const char *oid)
       nvti_add_refs (nvti, "bid", rep->element[NVT_BIDS_POS]->str, "");
       nvti_add_refs (nvti, NULL, rep->element[NVT_XREFS_POS]->str, "");
       nvti_set_category (nvti, atoi (rep->element[NVT_CATEGORY_POS]->str));
-      nvti_set_timeout (nvti, atoi (rep->element[NVT_TIMEOUT_POS]->str));
       nvti_set_family (nvti, rep->element[NVT_FAMILY_POS]->str);
       nvti_set_name (nvti, rep->element[NVT_NAME_POS]->str);
 
@@ -1169,6 +1222,100 @@ redis_del_items (kb_t kb, const char *name)
 }
 
 /**
+ * @brief Insert (append) a new unique and volatile entry under a given name.
+ *
+ * @param[in] kb  KB handle where to store the item.
+ * @param[in] name  Item name.
+ * @param[in] str  Item value.
+ * @param[in] expire Item expire.
+ * @param[in] len  Value length. Used for blobs.
+ * @param[in] pos  Which position the value is appended to. 0 for right,
+ *                 1 for left position in the list.
+ *
+ * @return 0 on success, -1 on error.
+ */
+static int
+redis_add_str_unique_volatile (kb_t kb, const char *name, const char *str,
+                               int expire, size_t len, int pos)
+{
+  struct kb_redis *kbr;
+  redisReply *rep = NULL;
+  int rc = 0;
+  redisContext *ctx;
+
+  kbr = redis_kb (kb);
+  if (get_redis_ctx (kbr) < 0)
+    return -1;
+  ctx = kbr->rctx;
+
+  /* Some VTs still rely on values being unique (ie. a value inserted multiple
+   * times, will only be present once.)
+   * Once these are fixed, the LREM becomes redundant and should be removed.
+   */
+  if (len == 0)
+    {
+      redisAppendCommand (ctx, "LREM %s 1 %s", name, str);
+      redisAppendCommand (ctx, "%s %s %s", pos ? "LPUSH" : "RPUSH", name, str);
+      redisAppendCommand (ctx, "EXPIRE %s %d", name, expire);
+      /* Check LREM reply. */
+      redisGetReply (ctx, (void **) &rep);
+      if (rep && rep->type == REDIS_REPLY_INTEGER && rep->integer == 1)
+        g_debug ("Key '%s' already contained value '%s'", name, str);
+      freeReplyObject (rep);
+      /* Check PUSH reply. */
+      redisGetReply (ctx, (void **) &rep);
+      if (rep == NULL || rep->type == REDIS_REPLY_ERROR)
+        {
+          rc = -1;
+          goto out;
+        }
+      /* Check EXPIRE reply. */
+      redisGetReply (ctx, (void **) &rep);
+      if (rep == NULL || rep->type == REDIS_REPLY_ERROR
+          || (rep && rep->type == REDIS_REPLY_INTEGER && rep->integer != 1))
+        {
+          g_warning ("%s: Not able to set expire", __func__);
+          rc = -1;
+          goto out;
+        }
+    }
+  else
+    {
+      redisAppendCommand (ctx, "LREM %s 1 %b", name, str, len);
+      redisAppendCommand (ctx, "%s %s %b", pos ? "LPUSH" : "RPUSH", name, str,
+                          len);
+      redisAppendCommand (ctx, "EXPIRE %s %d", name, expire);
+      /* Check LREM reply. */
+      redisGetReply (ctx, (void **) &rep);
+      if (rep && rep->type == REDIS_REPLY_INTEGER && rep->integer == 1)
+        g_debug ("Key '%s' already contained string '%s'", name, str);
+      freeReplyObject (rep);
+      /* Check PUSH reply. */
+      redisGetReply (ctx, (void **) &rep);
+      if (rep == NULL || rep->type == REDIS_REPLY_ERROR)
+        {
+          rc = -1;
+          goto out;
+        }
+      /* Check EXPIRE reply. */
+      redisGetReply (ctx, (void **) &rep);
+      if (rep == NULL || rep->type == REDIS_REPLY_ERROR
+          || (rep && rep->type == REDIS_REPLY_INTEGER && rep->integer != 1))
+        {
+          g_warning ("%s: Not able to set expire", __func__);
+          rc = -1;
+          goto out;
+        }
+    }
+
+out:
+  if (rep != NULL)
+    freeReplyObject (rep);
+
+  return rc;
+}
+
+/**
  * @brief Insert (append) a new unique entry under a given name.
  *
  * @param[in] kb  KB handle where to store the item.
@@ -1305,6 +1452,60 @@ redis_set_str (kb_t kb, const char *name, const char *val, size_t len)
  * @param[in] kb  KB handle where to store the item.
  * @param[in] name  Item name.
  * @param[in] val  Item value.
+ * @param[in] expire Item expire.
+ *
+ * @return 0 on success, non-null on error.
+ */
+static int
+redis_add_int_unique_volatile (kb_t kb, const char *name, int val, int expire)
+{
+  struct kb_redis *kbr;
+  redisReply *rep;
+  int rc = 0;
+  redisContext *ctx;
+
+  kbr = redis_kb (kb);
+  if (get_redis_ctx (kbr) < 0)
+    return -1;
+  ctx = kbr->rctx;
+  redisAppendCommand (ctx, "LREM %s 1 %d", name, val);
+  redisAppendCommand (ctx, "RPUSH %s %d", name, val);
+  redisAppendCommand (ctx, "EXPIRE %s %d", name, expire);
+  /* Check LREM reply. */
+  redisGetReply (ctx, (void **) &rep);
+  if (rep && rep->type == REDIS_REPLY_INTEGER && rep->integer == 1)
+    g_debug ("Key '%s' already contained integer '%d'", name, val);
+  freeReplyObject (rep);
+  /* Check PUSH reply. */
+  redisGetReply (ctx, (void **) &rep);
+  if (rep == NULL || rep->type == REDIS_REPLY_ERROR)
+    {
+      rc = -1;
+      goto out;
+    }
+  /* Check EXPIRE reply. */
+  redisGetReply (ctx, (void **) &rep);
+  if (rep == NULL || rep->type == REDIS_REPLY_ERROR
+      || (rep && rep->type == REDIS_REPLY_INTEGER && rep->integer != 1))
+    {
+      g_warning ("%s: Not able to set expire", __func__);
+      rc = -1;
+      goto out;
+    }
+
+out:
+  if (rep != NULL)
+    freeReplyObject (rep);
+
+  return rc;
+}
+
+/**
+ * @brief Insert (append) a new unique entry under a given name.
+ *
+ * @param[in] kb  KB handle where to store the item.
+ * @param[in] name  Item name.
+ * @param[in] val  Item value.
  *
  * @return 0 on success, non-null on error.
  */
@@ -1428,12 +1629,16 @@ redis_add_nvt (kb_t kb, const nvti_t *nvt, const char *filename)
 
   kbr = redis_kb (kb);
   rep = redis_cmd (
-    kbr, "RPUSH nvt:%s %s %s %s %s %s %s %s %s %s %s %s %d %d %s %s",
-    nvti_oid (nvt), filename, nvti_required_keys (nvt) ?: "",
-    nvti_mandatory_keys (nvt) ?: "", nvti_excluded_keys (nvt) ?: "",
-    nvti_required_udp_ports (nvt) ?: "", nvti_required_ports (nvt) ?: "",
-    nvti_dependencies (nvt) ?: "", nvti_tag (nvt) ?: "", cves ?: "", bids ?: "",
-    xrefs ?: "", nvti_category (nvt), nvti_timeout (nvt), nvti_family (nvt),
+    kbr, "RPUSH nvt:%s %s %s %s %s %s %s %s %s %s %s %s %d %s %s",
+    nvti_oid (nvt), filename,
+    nvti_required_keys (nvt) ? nvti_required_keys (nvt) : "",
+    nvti_mandatory_keys (nvt) ? nvti_mandatory_keys (nvt) : "",
+    nvti_excluded_keys (nvt) ? nvti_excluded_keys (nvt) : "",
+    nvti_required_udp_ports (nvt) ? nvti_required_udp_ports (nvt) : "",
+    nvti_required_ports (nvt) ? nvti_required_ports (nvt) : "",
+    nvti_dependencies (nvt) ? nvti_dependencies (nvt) : "",
+    nvti_tag (nvt) ? nvti_tag (nvt) : "", cves ? cves : "", bids ? bids : "",
+    xrefs ? xrefs : "", nvti_category (nvt), nvti_family (nvt),
     nvti_name (nvt));
   g_free (cves);
   g_free (bids);
@@ -1513,7 +1718,7 @@ redis_flush_all (kb_t kb, const char *except)
     {
       redisReply *rep;
 
-      kbr->rctx = redisConnectUnix (kbr->path);
+      kbr->rctx = connect_redis (kbr->path, strlen (kbr->path));
       if (kbr->rctx == NULL || kbr->rctx->err)
         {
           g_log (G_LOG_DOMAIN, G_LOG_LEVEL_CRITICAL,
@@ -1576,7 +1781,7 @@ redis_flush_all (kb_t kb, const char *except)
  *
  * @return 0 on success, -1 on error.
  */
-int
+static int
 redis_save (kb_t kb)
 {
   int rc;
@@ -1666,9 +1871,11 @@ static const struct kb_operations KBRedisOperations = {
   .kb_count = redis_count,
   .kb_add_str = redis_add_str,
   .kb_add_str_unique = redis_add_str_unique,
+  .kb_add_str_unique_volatile = redis_add_str_unique_volatile,
   .kb_set_str = redis_set_str,
   .kb_add_int = redis_add_int,
   .kb_add_int_unique = redis_add_int_unique,
+  .kb_add_int_unique_volatile = redis_add_int_unique_volatile,
   .kb_set_int = redis_set_int,
   .kb_add_nvt = redis_add_nvt,
   .kb_del_items = redis_del_items,
@@ -1676,7 +1883,6 @@ static const struct kb_operations KBRedisOperations = {
   .kb_save = redis_save,
   .kb_flush = redis_flush_all,
   .kb_direct_conn = redis_direct_conn,
-  .kb_get_kb_index = redis_get_kb_index,
-};
+  .kb_get_kb_index = redis_get_kb_index};
 
 const struct kb_operations *KBDefaultOperations = &KBRedisOperations;

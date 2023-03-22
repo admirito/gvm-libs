@@ -1,4 +1,4 @@
-/* Copyright (C) 2020-2021 Greenbone Networks GmbH
+/* Copyright (C) 2020-2022 Greenbone Networks GmbH
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
@@ -19,6 +19,7 @@
 
 #include "ping.h"
 
+#include "../base/prefs.h" /* for prefs_get() */
 #include "arp.h"
 #include "util.h"
 
@@ -247,37 +248,50 @@ send_icmp_v4 (int soc, struct in_addr *dst)
 void
 send_icmp (gpointer key, gpointer value, gpointer scanner_p)
 {
-  struct scanner *scanner;
+  scanner_t *scanner;
   struct in6_addr dst6;
   struct in6_addr *dst6_p = &dst6;
   struct in_addr dst4;
   struct in_addr *dst4_p = &dst4;
   static int count = 0;
+  int icmp_retries, grace_period = 0;
+  const char *tmp;
+  if ((icmp_retries =
+         (tmp = prefs_get ("icmp_retries")) != NULL ? atoi (tmp) : 1)
+      <= 0)
+    icmp_retries = 1;
+  else if (icmp_retries > 1)
+    grace_period =
+      (tmp = prefs_get ("icmp_grace_period")) != NULL ? atoi (tmp) : 0;
 
-  scanner = (struct scanner *) scanner_p;
+  scanner = (scanner_t *) scanner_p;
 
-  if (g_hash_table_contains (scanner->hosts_data->alivehosts, key))
-    return;
-
-  count++;
-  if (count % BURST == 0)
-    usleep (BURST_TIMEOUT);
-
-  if (gvm_host_get_addr6 ((gvm_host_t *) value, dst6_p) < 0)
-    g_warning ("%s: could not get addr6 from gvm_host_t", __func__);
-  if (dst6_p == NULL)
+  // we may send multiple icmp message to reduce to chance of unwanted drops
+  for (int i = 0; i < icmp_retries; i++)
     {
-      g_warning ("%s: destination address is NULL", __func__);
-      return;
-    }
-  if (IN6_IS_ADDR_V4MAPPED (dst6_p) != 1)
-    {
-      send_icmp_v6 (scanner->icmpv6soc, dst6_p, ICMP6_ECHO_REQUEST);
-    }
-  else
-    {
-      dst4.s_addr = dst6_p->s6_addr32[3];
-      send_icmp_v4 (scanner->icmpv4soc, dst4_p);
+      if (g_hash_table_contains (scanner->hosts_data->alivehosts, key))
+        return;
+      if (++count % BURST == 0)
+        usleep (BURST_TIMEOUT);
+
+      if (gvm_host_get_addr6 ((gvm_host_t *) value, dst6_p) < 0)
+        g_warning ("%s: could not get addr6 from gvm_host_t", __func__);
+      if (dst6_p == NULL)
+        {
+          g_warning ("%s: destination address is NULL", __func__);
+          return;
+        }
+      if (IN6_IS_ADDR_V4MAPPED (dst6_p) != 1)
+        {
+          send_icmp_v6 (scanner->icmpv6soc, dst6_p, ICMP6_ECHO_REQUEST);
+        }
+      else
+        {
+          dst4.s_addr = dst6_p->s6_addr32[3];
+          send_icmp_v4 (scanner->icmpv4soc, dst4_p);
+        }
+      if (grace_period > 0)
+        usleep (grace_period);
     }
 }
 
@@ -289,7 +303,7 @@ send_icmp (gpointer key, gpointer value, gpointer scanner_p)
  * @param tcp_flag  TH_SYN or TH_ACK.
  */
 static void
-send_tcp_v6 (struct scanner *scanner, struct in6_addr *dst_p)
+send_tcp_v6 (scanner_t *scanner, struct in6_addr *dst_p)
 {
   boreas_error_t error;
   struct sockaddr_in6 soca;
@@ -395,7 +409,7 @@ send_tcp_v6 (struct scanner *scanner, struct in6_addr *dst_p)
  * @param dst Destination address to send to.
  */
 static void
-send_tcp_v4 (struct scanner *scanner, struct in_addr *dst_p)
+send_tcp_v4 (scanner_t *scanner, struct in_addr *dst_p)
 {
   boreas_error_t error;
   struct sockaddr_in soca;
@@ -509,14 +523,14 @@ send_tcp_v4 (struct scanner *scanner, struct in_addr *dst_p)
 void
 send_tcp (gpointer key, gpointer value, gpointer scanner_p)
 {
-  struct scanner *scanner;
+  scanner_t *scanner;
   struct in6_addr dst6;
   struct in6_addr *dst6_p = &dst6;
   struct in_addr dst4;
   struct in_addr *dst4_p = &dst4;
   static int count = 0;
 
-  scanner = (struct scanner *) scanner_p;
+  scanner = (scanner_t *) scanner_p;
 
   if (g_hash_table_contains (scanner->hosts_data->alivehosts, key))
     return;
@@ -554,12 +568,12 @@ send_tcp (gpointer key, gpointer value, gpointer scanner_p)
 void
 send_arp (gpointer host_value_str, gpointer value, gpointer scanner_p)
 {
-  struct scanner *scanner;
+  scanner_t *scanner;
   struct in6_addr dst6;
   struct in6_addr *dst6_p = &dst6;
   static int count = 0;
 
-  scanner = (struct scanner *) scanner_p;
+  scanner = (scanner_t *) scanner_p;
 
   if (g_hash_table_contains (scanner->hosts_data->alivehosts, host_value_str))
     return;

@@ -1,4 +1,4 @@
-/* Copyright (C) 2009-2021 Greenbone Networks GmbH
+/* Copyright (C) 2009-2022 Greenbone Networks GmbH
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
@@ -36,7 +36,7 @@
  * @return New array.
  */
 GPtrArray *
-make_array ()
+make_array (void)
 {
   return g_ptr_array_new ();
 }

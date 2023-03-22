@@ -1,4 +1,4 @@
-/* Copyright (C) 2015-2021 Greenbone Networks GmbH
+/* Copyright (C) 2015-2022 Greenbone Networks GmbH
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
@@ -22,6 +22,7 @@
  * @brief Implementation of an API for Radius authentication.
  */
 
+#include "radiusutils.h"
 #ifdef ENABLE_RADIUS_AUTH
 
 #include <arpa/inet.h> /* for inet_pton */

@@ -1,4 +1,4 @@
-/* Copyright (C) 2014-2021 Greenbone Networks GmbH
+/* Copyright (C) 2014-2022 Greenbone Networks GmbH
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
@@ -69,7 +69,6 @@ enum kb_nvt_pos
   NVT_BIDS_POS,
   NVT_XREFS_POS,
   NVT_CATEGORY_POS,
-  NVT_TIMEOUT_POS,
   NVT_FAMILY_POS,
   NVT_NAME_POS,
   NVT_TIMESTAMP_POS,
@@ -94,7 +93,7 @@ struct kb_item
   struct kb_item *next; /**< Next item in list. */
 
   size_t namelen; /**< Name length (including final NULL byte). */
-  char name[0];   /**< Name of this knowledge base item.  */
+  char name[];    /**< Name of this knowledge base item.  */
 };
 
 struct kb_operations;
@@ -185,6 +184,12 @@ struct kb_operations
    */
   int (*kb_add_str_unique) (kb_t, const char *, const char *, size_t, int);
   /**
+   * Function provided by an implementation to insert (append) a new
+   * unique and volatile entry under a given name.
+   */
+  int (*kb_add_str_unique_volatile) (kb_t, const char *, const char *, int,
+                                     size_t, int);
+  /**
    * Function provided by an implementation to get (replace) a new entry
    * under a given name.
    */
@@ -199,6 +204,11 @@ struct kb_operations
    * unique entry under a given name.
    */
   int (*kb_add_int_unique) (kb_t, const char *, int);
+  /**
+   * Function provided by an implementation to insert (append) a new
+   * unique and volatile entry under a given name.
+   */
+  int (*kb_add_int_unique_volatile) (kb_t, const char *, int, int);
   /**
    * Function provided by an implementation to get (replace) a new entry
    * under a given name.
@@ -474,6 +484,29 @@ kb_item_add_str_unique (kb_t kb, const char *name, const char *str, size_t len,
 }
 
 /**
+ * @brief Insert (append) a new unique and volatile entry under a given name.
+ * @param[in] kb     Reference to a kb_t to initialize.
+ * @param[in] name   Item name.
+ * @param[in] val    Item value.
+ * @param[in] expire Item expire.
+ * @param[in] len    Value length. Used for blobs.
+ * @param[in] pos    Which position the value is appended to. 0 for right, 1 for
+ * left position in the list.
+ * @return 0 on success, -1 on error.
+ */
+static inline int
+kb_add_str_unique_volatile (kb_t kb, const char *name, const char *str,
+                            int expire, size_t len, int pos)
+{
+  assert (kb);
+  assert (KBDefaultOperations);
+  assert (KBDefaultOperations->kb_add_str_unique_volatile);
+
+  return KBDefaultOperations->kb_add_str_unique_volatile (kb, name, str, expire,
+                                                          len, pos);
+}
+
+/**
  * @brief Set (replace) a new entry under a given name.
  * @param[in] kb  KB handle where to store the item.
  * @param[in] name  Item name.
@@ -523,6 +556,26 @@ kb_item_add_int_unique (kb_t kb, const char *name, int val)
   assert (kb->kb_ops->kb_add_int_unique);
 
   return kb->kb_ops->kb_add_int_unique (kb, name, val);
+}
+
+/**
+ * @brief Insert (append) a new unique and volatile entry under a given name.
+ * @param[in] kb     Reference to a kb_t to initialize.
+ * @param[in] name   Item name.
+ * @param[in] val    Item value.
+ * @param[in] expire Item expire.
+ *
+ * @return 0 on success, -1 on error.
+ */
+static inline int
+kb_add_int_unique_volatile (kb_t kb, const char *name, int val, int expire)
+{
+  assert (kb);
+  assert (KBDefaultOperations);
+  assert (KBDefaultOperations->kb_add_int_unique_volatile);
+
+  return KBDefaultOperations->kb_add_int_unique_volatile (kb, name, val,
+                                                          expire);
 }
 
 /**
