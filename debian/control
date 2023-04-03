@@ -1,8 +1,8 @@
 Source: gvm-libs
 Priority: optional
 Maintainer: Mohammad Razavi <mrazavi64@gmail.com>
-Build-Depends: debhelper-compat (= 12), cmake, pkg-config, libglib2.0-dev, libgnutls28-dev, libgcrypt20-dev, zlib1g-dev, libgpgme-dev, uuid-dev, libssh-dev, libhiredis-dev, libldap2-dev, libradcli-dev, libfreeradius-dev, libxml2-dev, libpcap-dev, libnet1-dev, doxygen, xmltoman
-Standards-Version: 4.4.1
+Build-Depends: debhelper-compat (= 13), cmake, pkg-config, libglib2.0-dev, libgnutls28-dev, libgcrypt20-dev, zlib1g-dev, libgpgme-dev, uuid-dev, libssh-dev, libhiredis-dev, libldap2-dev, libradcli-dev, libfreeradius-dev, libxml2-dev, libpcap-dev, libnet1-dev, libpaho-mqtt-dev, doxygen, xmltoman
+Standards-Version: 4.6.2
 Section: libs
 Homepage: https://community.greenbone.net/
 Vcs-Browser: https://github.com/greenbone/gvm-libs
@@ -41,8 +41,8 @@ Description: remote network security auditor - shared libraries
 Package: gvm
 Architecture: any
 Section: metapackages
-Depends: ${misc:Depends}, gvmd-pg (>= 21.4.3), greenbone-security-assistant (>= 21.4.4)
-Recommends: ospd-openvas (>= 21.4.2)
+Depends: ${misc:Depends}, gvmd-pg (>= 22.4.2), greenbone-security-assistant (>= 22.4.1)
+Recommends: ospd-openvas (>= 22.4.6), greenbone-feed-sync (>= 23.2.1)
 Description: remote network security auditor - metapackage
  The Greenbone Vulnerability Management Solution (previously known as
  Open Vulnerability Assessment System) is a modular security auditing tool,
